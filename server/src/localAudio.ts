@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { lstat, readdir, realpath, open } from "node:fs/promises";
+import { lstat, readdir, realpath, open, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Track } from "./types.js";
 
@@ -155,4 +155,23 @@ export async function localAudio(track: Track): Promise<Entry | null> {
 export async function localMusicStatus() {
   await ensureIndex();
   return { available: rootReal !== null, indexedFiles: count, folder: musicRoot() };
+}
+
+
+/** Read only sidecar lyrics alongside the validated, matching audio file.
+ * No raw filenames or paths are accepted from HTTP clients.
+ */
+export async function localLyrics(track: Track): Promise<string | null> {
+  const item = await localAudio(track);
+  if (!item) return null;
+  const sidecar = item.file.slice(0, -path.extname(item.file).length) + ".lrc";
+  try {
+    const info = await lstat(sidecar);
+    if (!info.isFile() || info.size > 512_000) return null;
+    const resolved = await realpath(sidecar);
+    if (!rootReal) return null;
+    const relative = path.relative(rootReal, resolved);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return null;
+    return await readFile(resolved, "utf8");
+  } catch { return null; }
 }

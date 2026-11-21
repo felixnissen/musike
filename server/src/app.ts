@@ -4,7 +4,7 @@ import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
 import { config } from "./config.js";
-import { localAudio, localMusicStatus } from "./localAudio.js";
+import { localAudio, localLyrics, localMusicStatus } from "./localAudio.js";
 import { pairingInfo, startMusicPeerServer } from "./musicPeer.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
@@ -149,6 +149,13 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   app.post("/api/prepare/:id", async (req) => {
     const r = await resolveStreams(videoId(req.params));
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video };
+  });
+
+  app.get("/api/lyrics/:id", async (req, reply) => {
+    const track = await knownTrack(videoId(req.params));
+    const lrc = track ? await localLyrics(track) : null;
+    if (!lrc) return reply.code(404).send({ error: "No synchronized lyrics available for this recording." });
+    return { format: "lrc", text: lrc, source: "MusicGrabber" };
   });
 
   app.get("/api/local/status", () => localMusicStatus());
