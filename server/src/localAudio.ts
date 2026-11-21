@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { lstat, readdir, realpath } from "node:fs/promises";
+import { lstat, readdir, realpath, open } from "node:fs/promises";
 import path from "node:path";
 import type { Track } from "./types.js";
 
@@ -14,7 +14,47 @@ const MIME: Record<string, string> = {
 export const musicRoot = () => process.env.MUSIKE_MUSIC_DIR || path.join(homedir(), "Music", "MusicGrabber");
 const normal = (input: string) => input.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
   .replace(/[^a-zA-Z0-9]+/g, " ").trim().toLowerCase().replace(/\s+/g, " ");
-const key = (artist: string, title: string) => normal(artist) + "\\x00" + normal(title);
+const key = (artist: string, title: string) => normal(artist).replace(/ /g, "") + "\\x00" + normal(title);
+type Tags = { artist?: string; title?: string };
+
+/** Read OpusTags without loading the audio file. MusicGrabber can rename the
+ * downloaded file after MusicBrainz matches the recording; the actual TITLE
+ * tag then identifies the original playlist track correctly.
+ */
+async function opusMetadata(file: string): Promise<Tags | null> {
+  const fd = await open(file, "r");
+  const buffer = Buffer.alloc(32768);
+  let bytesRead = 0;
+  try { ({ bytesRead } = await fd.read(buffer, 0, buffer.length, 0)); }
+  finally { await fd.close(); }
+  const start = buffer.subarray(0, bytesRead).indexOf("OpusTags");
+  if (start < 0) return null;
+  let offset = start + 8;
+  const field = () => {
+    if (offset + 4 > bytesRead) return null;
+    const size = buffer.readUInt32LE(offset);
+    offset += 4;
+    if (size > 16384 || offset + size > bytesRead) return null;
+    const value = buffer.subarray(offset, offset + size).toString("utf8");
+    offset += size;
+    return value;
+  };
+  if (field() === null || offset + 4 > bytesRead) return null;
+  const count = buffer.readUInt32LE(offset);
+  offset += 4;
+  const result: Tags = {};
+  for (let i = 0; i < Math.min(count, 256); i++) {
+    const comment = field();
+    if (!comment) break;
+    const idx = comment.indexOf("=");
+    if (idx < 0) continue;
+    const name = comment.slice(0, idx).toLowerCase();
+    if ((name === "artist" || name === "title") && !result[name])
+      result[name] = comment.slice(idx + 1).trim();
+  }
+  return result;
+}
+
 type Entry = { file: string; mime: string };
 const cache = new Map<string, Entry | null>();
 let refreshAt = 0;
@@ -64,6 +104,17 @@ async function scan() {
           if (!match) continue;
           artist = match[1]; title = match[2];
         } else continue;
+        // MusicGrabber writes the canonical recording title to metadata; use it
+        // before filenames such as "Into Yesterday (Album Version).opus".
+        if (ext === ".opus") {
+          try {
+            const tags = await opusMetadata(full);
+            if (tags?.artist && tags.title) {
+              artist = tags.artist;
+              title = tags.title;
+            }
+          } catch { /* still use the filename if tags cannot be read */ }
+        }
         const id = key(artist, title);
         if (!artist || !title || id.charCodeAt(0) === 0) continue;
         if (files.has(id)) files.set(id, null);

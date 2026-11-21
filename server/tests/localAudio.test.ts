@@ -29,6 +29,36 @@ test("uses a local file only for an exact artist/title match", async () => {
   assert.equal(await localAudio({ ...track, title: "Another song" }), null);
   assert.equal(await localAudio({ ...track, kind: "video" }), null);
 });
+test("MusicGrabber normalized artist folders match display names", async () => {
+  const dir = await root();
+  const artist = path.join(dir, "Singles", "3doorsdown");
+  await mkdir(artist, { recursive: true });
+  const song = path.join(artist, "Kryptonite.opus");
+  await writeFile(song, Buffer.alloc(100, 1));
+  assert.equal((await localAudio(track))?.file, song);
+});
+test("Opus metadata restores the canonical song title after file renaming", async () => {
+  const dir = await root();
+  const artist = path.join(dir, "Singles", "Sugar Ray");
+  await mkdir(artist, { recursive: true });
+  const writeField = (value: string) => {
+    const text = Buffer.from(value, "utf8");
+    const len = Buffer.alloc(4);
+    len.writeUInt32LE(text.length);
+    return Buffer.concat([len, text]);
+  };
+  const one = Buffer.alloc(4);
+  one.writeUInt32LE(2);
+  const tags = Buffer.concat([
+    Buffer.from("OggSplaceholderOpusTags"), writeField("MusicGrabber"), one,
+    writeField("ARTIST=Sugar Ray"), writeField("TITLE=Into Yesterday"),
+    Buffer.alloc(200),
+  ]);
+  const file = path.join(artist, "Into Yesterday (Album Version).opus");
+  await writeFile(file, tags);
+  const local = await localAudio({ ...track, artist: "Sugar Ray", title: "Into Yesterday" });
+  assert.equal(local?.file, file);
+});
 test("ambiguous file matches fall back rather than playing the wrong recording", async () => {
   const dir = await root();
   const artist = path.join(dir, "Singles", "3 Doors Down");
