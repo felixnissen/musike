@@ -2,6 +2,7 @@ import { ClockIcon, DotsThreeIcon, HeartIcon, VideoCameraIcon } from "@phosphor-
 import { memo, type MouseEvent } from "react";
 import { useT } from "../i18n";
 import { cn, formatTime } from "../lib/format";
+import { warmupTrack } from "../lib/warmup";
 import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer } from "../player/player";
 import { useAppearance } from "../stores/appearance";
@@ -47,6 +48,10 @@ const TrackRow = memo(function TrackRow({ track, position, onPlay, playlistId, s
       <button
         type="button"
         onClick={onPlay}
+        onPointerEnter={(event) => {
+          if (event.pointerType === "mouse" || event.pointerType === "pen") warmupTrack(track);
+        }}
+        onFocus={() => warmupTrack(track)}
         aria-label={t.common.playX(track.title)}
         className="absolute inset-0 rounded-xl focus-visible:outline-offset-[-2px]"
       />
