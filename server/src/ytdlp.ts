@@ -138,6 +138,10 @@ function expiryOf(url: string): number {
 
 const cache = new Map<string, Promise<Resolved>>();
 const resolvedAt = new Map<string, Resolved>();
+// Fast audio-only path. Keep separate from video-format resolution.
+const fastAudio = new Map<string, Promise<{ format: StreamFormat; expiresAt: number }>>();
+const directBlockedUntil = new Map<string, number>();
+
 
 // When yt-dlp fails, the clients to ask YouTube directly (see directAudio.ts), refreshed from the repository.
 // Read lazily: directAudio.ts and this module import each other through search.ts.
@@ -206,8 +210,50 @@ export function resolveStreams(id: string): Promise<Resolved> {
   return job;
 }
 
+/**
+ * Prefer the direct audio URL, falling back to yt-dlp. The separate cache
+ * preserves video resolution and coalesces concurrent lookups.
+ */
+export async function resolveFastAudio(id: string): Promise<StreamFormat> {
+  const known = resolvedAt.get(id);
+  if (known && known.expiresAt > Date.now()) return known.audio;
+  const cached = fastAudio.get(id);
+  if (cached) {
+    const resolved = await cached;
+    if (resolved.expiresAt > Date.now()) return resolved.format;
+    fastAudio.delete(id);
+  }
+  const job = (async () => {
+    try {
+      if ((directBlockedUntil.get(id) ?? 0) > Date.now()) throw new Error("direct audio rejected");
+      const result = await directAudio(id, await clientsForDirect());
+      return {
+        format: { formatId: "direct", url: result.url, headers: {}, mime: result.mime },
+        expiresAt: result.expiresAt - 10 * 60_000,
+      };
+    } catch {
+      const result = await resolveStreams(id);
+      return { format: result.audio, expiresAt: result.expiresAt };
+    }
+  })();
+  fastAudio.set(id, job);
+  try {
+    return (await job).format;
+  } catch (error) {
+    if (fastAudio.get(id) === job) fastAudio.delete(id);
+    throw error;
+  }
+}
+
+/** Temporarily use yt-dlp after the direct URL gives HTTP 403/410. */
+export function markDirectAudioRejected(id: string) {
+  directBlockedUntil.set(id, Date.now() + 60_000);
+  fastAudio.delete(id);
+}
+
 export function invalidate(id: string) {
   resolvedAt.delete(id);
+  fastAudio.delete(id);
 }
 
 const downloads = new Map<string, Promise<string>>();

@@ -3,6 +3,7 @@ import { getT, useT } from "../i18n";
 import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
+import { warmupTrack } from "../lib/warmup";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
 import { openSettings } from "../stores/system";
@@ -248,7 +249,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     const upcoming = s.queue[s.index + 1];
     if (!upcoming) return;
     if (s.preferVideo) void lookupClip(upcoming).then((id) => api.prepare(id ?? upcoming.id).catch(() => {}));
-    else api.prepare(upcoming.id).catch(() => {});
+    else warmupTrack(upcoming);
   }
 
   function onEnded() {

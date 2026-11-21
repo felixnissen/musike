@@ -12,7 +12,7 @@ import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
 import { HttpError, VIDEO_ID } from "./types.js";
-import { downloadHd, pruneCache, resolveStreams } from "./ytdlp.js";
+import { downloadHd, pruneCache, resolveFastAudio, resolveStreams } from "./ytdlp.js";
 
 function videoId(params: unknown): string {
   const id = (params as { id?: string }).id ?? "";
@@ -127,6 +127,12 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   // Playback
 
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
+  // Prepare an audio URL without downloading music or resolving video formats.
+  app.post("/api/prepare-audio/:id", async (req) => {
+    await resolveFastAudio(videoId(req.params));
+    return { ok: true };
+  });
+
   app.post("/api/prepare/:id", async (req) => {
     const r = await resolveStreams(videoId(req.params));
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video };

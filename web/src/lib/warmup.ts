@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, capabilities } from "./api";
 import type { Track } from "./types";
 
 // Speculatively resolve a song when someone hovers its play row.
@@ -16,7 +16,12 @@ export function warmupTrack(track: Track): void {
   recently.set(track.id, now);
   if (recently.size > MAX_RECENT) recently.delete(recently.keys().next().value!);
   busy = true;
-  void api.prepare(track.id).catch(() => {
+  const task = capabilities.video
+    ? fetch("/api/prepare-audio/" + track.id, { method: "POST" }).then((res) => {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+      })
+    : api.prepare(track.id).then(() => {});
+  void task.catch(() => {
     // Retry on a future hover rather than permanently caching a network error.
     recently.delete(track.id);
   }).finally(() => { busy = false; });

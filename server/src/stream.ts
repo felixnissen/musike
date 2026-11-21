@@ -4,7 +4,7 @@ import { Readable } from "node:stream";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { msg } from "./i18n.js";
 import { HttpError } from "./types.js";
-import { invalidate, resolveStreams, type StreamFormat } from "./ytdlp.js";
+import { invalidate, markDirectAudioRejected, resolveFastAudio, resolveStreams, type StreamFormat } from "./ytdlp.js";
 
 const PASS_HEADERS = ["content-length", "content-range", "accept-ranges", "last-modified"];
 
@@ -15,8 +15,9 @@ const PASS_HEADERS = ["content-length", "content-range", "accept-ranges", "last-
 export async function proxyStream(req: FastifyRequest, reply: FastifyReply, id: string, kind: "audio" | "video") {
   const pick = async (fresh: boolean): Promise<StreamFormat> => {
     if (fresh) invalidate(id);
-    const resolved = await resolveStreams(id);
-    const fmt = kind === "audio" ? resolved.audio : resolved.video;
+    const fmt = kind === "audio"
+      ? await resolveFastAudio(id)
+      : (await resolveStreams(id)).video;
     if (!fmt) throw new HttpError(404, msg("noSdVideo"));
     return fmt;
   };
@@ -37,6 +38,7 @@ export async function proxyStream(req: FastifyRequest, reply: FastifyReply, id: 
   let upstream = await request(fmt);
   // Expired or rejected URL: resolve again once.
   if (upstream.status === 403 || upstream.status === 410) {
+    if (kind === "audio" && fmt.formatId === "direct") markDirectAudioRejected(id);
     await upstream.body?.cancel();
     fmt = await pick(true);
     upstream = await request(fmt);
