@@ -14,6 +14,7 @@ import { cn } from "../lib/format";
 import { useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
+import { PeerMusicSection } from "./PeerMusicSection";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
 import { Modal } from "./Modal";
 
@@ -155,6 +156,8 @@ export function SettingsDialog() {
         <LayoutSection />
 
         <BackupSection />
+
+        <PeerMusicSection />
 
         {capabilities.engineSettings && (
         <section className="flex flex-col gap-3">

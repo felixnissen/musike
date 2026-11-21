@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { getT, useT } from "../i18n";
-import { api, capabilities, explainStreamError, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
+import { api, capabilities, explainStreamError, markStreamFailure, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
 import { warmupTrack } from "../lib/warmup";
@@ -292,6 +292,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
   function onError(media: HTMLMediaElement) {
     const mine = token;
     const url = media.currentSrc || media.src;
+    markStreamFailure(url);
     if (capabilities.retryOnError && retriedToken !== mine) {
       const at = media.currentTime || get().position;
       load(get().index, { startAt: at, autoplay: true });

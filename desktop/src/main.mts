@@ -20,6 +20,9 @@ if (!app.requestSingleInstanceLock()) {
 // Everything the user owns lives in their profile, so updates and reinstalls keep it.
 const userData = app.getPath("userData");
 process.env.MUSIKE_DATA_DIR = path.join(userData, "data");
+// Optional dedicated token-authenticated music endpoint, loopback only.
+// May be published through Tailscale Serve HTTPS; never exposes the normal API.
+process.env.MUSIKE_PEER_ENABLED = "1";
 process.env.MUSIKE_CACHE_DIR = path.join(userData, "cache");
 process.env.MUSIKE_BIN_DIR = path.join(userData, "bin");
 process.env.MUSIKE_WEB_DIST = app.isPackaged ? path.join(process.resourcesPath, "web") : path.resolve(here, "..", "..", "web", "dist");

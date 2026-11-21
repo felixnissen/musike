@@ -4,6 +4,8 @@ import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
 import { config } from "./config.js";
+import { localAudio, localMusicStatus } from "./localAudio.js";
+import { pairingInfo, startMusicPeerServer } from "./musicPeer.js";
 import * as library from "./library.js";
 import { fileStorage } from "./libraryFile.js";
 import { findVideoFor, radio, search, suggestions } from "./search.js";
@@ -18,6 +20,12 @@ function videoId(params: unknown): string {
   const id = (params as { id?: string }).id ?? "";
   if (!VIDEO_ID.test(id)) throw new HttpError(400, msg("invalidVideoId"));
   return id;
+}
+
+async function knownTrack(id: string) {
+  const saved = await library.getLibrary();
+  return [...saved.favorites, ...saved.history,
+    ...saved.playlists.flatMap((playlist) => playlist.tracks)].find((track) => track.id === id);
 }
 
 function query(q: unknown): string {
@@ -43,6 +51,9 @@ export interface RunningServer {
 export async function startServer(opts: StartOptions = {}): Promise<RunningServer> {
   library.useLibraryStorage(fileStorage());
   const found = await refreshTools();
+  const peerClose = process.env.MUSIKE_PEER_ENABLED === "1"
+    ? await startMusicPeerServer().catch(() => null)
+    : null;
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
 
   app.setErrorHandler((err, req, reply) => {
@@ -129,7 +140,9 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
   // Prepare an audio URL without downloading music or resolving video formats.
   app.post("/api/prepare-audio/:id", async (req) => {
-    await resolveFastAudio(videoId(req.params));
+    const id = videoId(req.params);
+    const track = await knownTrack(id);
+    if (!track || !(await localAudio(track))) await resolveFastAudio(id);
     return { ok: true };
   });
 
@@ -138,7 +151,30 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return { id: r.id, title: r.title, duration: r.duration, hasSdVideo: !!r.video };
   });
 
-  app.get("/api/stream/:id/audio", (req, reply) => proxyStream(req, reply, videoId(req.params), "audio"));
+  app.get("/api/local/status", () => localMusicStatus());
+
+  // Only accessible from the desktop app's loopback origin.
+  app.get("/api/local/pairing", async (req) => {
+    const remote = req.socket.remoteAddress;
+    if (remote !== "127.0.0.1" && remote !== "::1" && remote !== "::ffff:127.0.0.1")
+      throw new HttpError(403, msg("invalidVideoId"));
+    if (process.env.MUSIKE_PEER_ENABLED !== "1" || !peerClose)
+      return { enabled: false };
+    return pairingInfo();
+  });
+
+  app.get("/api/stream/:id/audio", async (req, reply) => {
+    const id = videoId(req.params);
+    const forceYoutube = (req.query as { youtube?: string }).youtube === "1";
+    if (!forceYoutube) {
+      const track = await knownTrack(id);
+      if (track) {
+        const local = await localAudio(track);
+        if (local) return serveFile(req, reply, local.file, local.mime);
+      }
+    }
+    return proxyStream(req, reply, id, "audio");
+  });
 
   app.get("/api/stream/:id/video", async (req, reply) => {
     const id = videoId(req.params);
@@ -226,7 +262,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   await app.listen({ port, host });
 
   pruneCache().catch(() => {});
-  return { port, tools: found, close: () => app.close() };
+  return { port, tools: found, close: async () => { await app.close(); await peerClose?.(); } };
 }
 
 /** First free port from `start` (up to 10 tries), so a second copy or a dev server doesn't block launch. */

@@ -21,6 +21,7 @@ import "./android";
 import { media } from "./media";
 import { nativeStorage } from "./storage";
 import { forgetUrl, resolveAudio } from "./streams";
+import { forgetPeerStream, streamWithPeer } from "./musicPeer";
 
 // The Android backend: the Musike server's own code (search, genres, artists, albums, library), running on the
 // phone instead of behind HTTP. The build swaps lib/api.ts for this module (see vite.config.ts).
@@ -114,7 +115,8 @@ export const api: MusikeApi = {
 };
 
 /** On the phone, the media element plays YouTube's stream directly: resolved here, no proxy needed. */
-export const streamSource = (id: string): Promise<string> => resolveAudio(id).then((r) => r.url);
+export const streamSource = (id: string): Promise<string> => streamWithPeer(id);
+export const markStreamFailure = (url: string) => forgetPeerStream(url);
 
 export async function explainStreamError(url: string): Promise<{ message: string }> {
   forgetUrl(url);

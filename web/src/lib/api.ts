@@ -81,9 +81,16 @@ export const api: MusikeApi = {
   updateYtdlp: (channel: Channel) => request<SystemJob>("/api/system/ytdlp", { method: "POST", json: { channel } }),
 };
 
-/** What a media element plays for a track: here, the server's stream proxy. The Android backend resolves it on the phone. */
+/** Direct local streams are preferred; retry from YouTube on decode/network errors. */
+const bypassLocal = new Map<string, number>();
 export const streamSource = (id: string, kind: "audio" | "video", quality: "sd" | "hd"): string | Promise<string> =>
-  kind === "audio" ? `/api/stream/${id}/audio` : `/api/stream/${id}/video?q=${quality}`;
+  kind === "audio"
+    ? "/api/stream/" + id + "/audio" + ((bypassLocal.get(id) ?? 0) > Date.now() ? "?youtube=1" : "")
+    : "/api/stream/" + id + "/video?q=" + quality;
+export const markStreamFailure = (url: string): void => {
+  const found = /\/api\/stream\/([A-Za-z0-9_-]{11})\/audio(?:\?|$)/.exec(url);
+  if (found) bypassLocal.set(found[1], Date.now() + 90_000);
+};
 
 /** Saves a text file the way this platform does it: a browser download (the desktop app shows "Save as"). */
 export async function saveFile(name: string, text: string) {
