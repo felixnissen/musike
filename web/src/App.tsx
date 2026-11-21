@@ -15,6 +15,7 @@ import { MD, useMediaQuery } from "./hooks/useMediaQuery";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { getT } from "./i18n";
 import { capabilities } from "./lib/api";
+import { currentAccount, syncAccount } from "./lib/accountSync";
 import { cn } from "./lib/format";
 import { legacyRedirect, NOW_PLAYING_HASH, paths } from "./lib/routes";
 import { usePlayer } from "./player/player";
@@ -49,6 +50,22 @@ export default function App() {
   useEffect(() => {
     void loadLibrary();
   }, [loadLibrary]);
+
+  // Account synchronization belongs to the application lifecycle, not the
+  // Settings modal (which unmounts when closed).
+  useEffect(() => {
+    let working = false;
+    const poll = () => {
+      if (working || !currentAccount() || document.visibilityState === "hidden") return;
+      working = true;
+      void syncAccount().catch(() => {
+        // Offline: no changes are made to local data. Retry on next poll.
+      }).finally(() => { working = false; });
+    };
+    const initial = window.setTimeout(poll, 5000);
+    const interval = window.setInterval(poll, 120_000);
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); };
+  }, []);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
   useEffect(() => {

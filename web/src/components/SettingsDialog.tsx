@@ -15,6 +15,7 @@ import { useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
 import { PeerMusicSection } from "./PeerMusicSection";
+import { AccountSyncSection } from "./AccountSyncSection";
 import { AccentPicker, LayoutSection } from "./CustomizeSection";
 import { Modal } from "./Modal";
 
@@ -158,6 +159,8 @@ export function SettingsDialog() {
         <BackupSection />
 
         <PeerMusicSection />
+
+        <AccountSyncSection />
 
         {capabilities.engineSettings && (
         <section className="flex flex-col gap-3">

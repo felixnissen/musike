@@ -7,8 +7,9 @@ import { config } from "./config.js";
 import * as library from "./library.js";
 import { localAudio, localMusicStatus } from "./localAudio.js";
 import { VIDEO_ID } from "./types.js";
+import { getAccountState, loginAccount, logout, registerAccount, SyncError, updateAccountState } from "./accountSync.js";
 
-const PORT = 4283;
+const PORT = Number(process.env.MUSIKE_PEER_PORT || 4283);
 let token: string | null = null;
 let server: Server | null = null;
 
@@ -50,9 +51,16 @@ export async function startMusicPeerServer(): Promise<() => Promise<void>> {
     // Capacitor's WebView fetches the availability probe; the stream is
     // opened by the media element itself.
     const origin = req.headers.origin;
-    if (origin === "http://localhost" || origin === "capacitor://localhost" || origin === "https://localhost") {
+    if (origin === "http://127.0.0.1:4280" || origin === "http://localhost" || origin === "capacitor://localhost" || origin === "https://localhost") {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Vary", "Origin");
+    }
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Musike-Pairing");
+    res.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS");
+    if (req.method === "OPTIONS") {
+      res.writeHead(origin === "http://127.0.0.1:4280" || origin === "http://localhost" || origin === "capacitor://localhost" || origin === "https://localhost" ? 204 : 403);
+      res.end();
+      return;
     }
     const send = (status: number, body: unknown) => {
       res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
@@ -61,6 +69,45 @@ export async function startMusicPeerServer(): Promise<() => Promise<void>> {
     try {
       if (!req.url) return send(404, { error: "missing" });
       const url = new URL(req.url, "http://127.0.0.1");
+      // Account sync is intentionally separate from music streaming: it never
+      // exposes the unauthenticated desktop library, and never needs music files.
+      if (url.pathname.startsWith("/v1/sync/")) {
+        const bearer = /^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization || "")?.[1] ?? null;
+        const body = async () => {
+          let received = "";
+          for await (const chunk of req) {
+            received += chunk.toString("utf8");
+            if (Buffer.byteLength(received, "utf8") > 8.5 * 1024 * 1024)
+              throw new SyncError(413, "Request too large.");
+          }
+          try { return JSON.parse(received) as Record<string, unknown>; }
+          catch { throw new SyncError(400, "Invalid JSON."); }
+        };
+        try {
+          if (url.pathname === "/v1/sync/register" && req.method === "POST") {
+            if (!authorized(req.headers["x-musike-pairing"] as string | null))
+              throw new SyncError(403, "Pairing key required to create an account.");
+            const v = await body();
+            return send(200, await registerAccount(String(v.username || ""), String(v.password || "")));
+          }
+          if (url.pathname === "/v1/sync/login" && req.method === "POST") {
+            const v = await body();
+            return send(200, await loginAccount(String(v.username || ""), String(v.password || ""), req.socket.remoteAddress || "unknown"));
+          }
+          if (url.pathname === "/v1/sync/logout" && req.method === "POST") {
+            await logout(bearer); return send(200, { ok: true });
+          }
+          if (url.pathname === "/v1/sync/state" && req.method === "GET")
+            return send(200, await getAccountState(bearer));
+          if (url.pathname === "/v1/sync/state" && req.method === "PUT") {
+            const v = await body();
+            return send(200, await updateAccountState(bearer, Number(v.revision), v.backup));
+          }
+          return send(404, { error: "not found" });
+        } catch (e) {
+          return send(e instanceof SyncError ? e.status : 500, { error: e instanceof SyncError ? e.message : "internal" });
+        }
+      }
       if (!authorized(url.searchParams.get("token"))) return send(401, { error: "unauthorized" });
       if (url.pathname === "/v1/health") return send(200, { ok: true });
       if (req.method !== "GET" && req.method !== "HEAD") return send(405, { error: "method" });
