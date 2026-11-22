@@ -15,6 +15,7 @@ export type StatusNote = "findingClip" | "preparingHd" | "loadingVideo" | "fetch
 export type Status = "idle" | "loading" | "playing" | "paused" | "error";
 type Kind = "audio" | "video";
 type Quality = "sd" | "hd";
+export type PlaybackSource = "checking" | "local" | "youtube" | "video";
 
 interface PlayerState {
   queue: Track[];
@@ -26,6 +27,8 @@ interface PlayerState {
   statusText: StatusNote | null;
   /** Which media element is driving playback right now. */
   mediaKind: Kind;
+  /** Source actually selected for the current track, not network state. */
+  playbackSource: PlaybackSource;
   /** Set when Video mode is on but the current song has no music video on YouTube. */
   videoNote: "noClip" | null;
   /** Intrinsic width/height of the current video, so vertical videos get a vertical stage. */
@@ -165,6 +168,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         index,
         status: "loading",
         statusText: "findingClip",
+        playbackSource: "checking",
         videoNote: null,
         position: opts.startAt ?? 0,
         duration: track.duration,
@@ -192,6 +196,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     set({
       index,
       mediaKind: kind,
+      playbackSource: kind === "video" ? "video" : "checking",
       status: autoplay ? "loading" : "paused",
       // Video may need a server-side download first (HD, or videos without a combined SD stream).
       statusText: kind === "video" ? (s.quality === "hd" ? "preparingHd" : "loadingVideo") : null,
@@ -202,7 +207,25 @@ export const usePlayer = create<PlayerState>((set, get) => {
     });
     media.volume = s.volume;
     media.muted = s.muted;
+    const currentLoad = token;
     const start = (src: string) => {
+      if (currentLoad !== token) return;
+      if (kind === "video") set({ playbackSource: "video" });
+      else if (capabilities.video) {
+        // Desktop streams through a single proxy URL regardless of its source.
+        // Ask the server which source it will use; never infer from the URL.
+        if (src.includes("youtube=1")) set({ playbackSource: "youtube" });
+        else void fetch("/api/local/track/" + encodeURIComponent(track.id), {
+          signal: AbortSignal.timeout(5000), cache: "no-store",
+        }).then((r) => r.ok ? r.json() as Promise<{ local: boolean }> : null)
+          .then((v) => { if (currentLoad === token) set({ playbackSource: v?.local ? "local" : "youtube" }); })
+          .catch(() => { if (currentLoad === token) set({ playbackSource: "checking" }); });
+      } else {
+        // Android receives a direct private peer URL or a resolved YouTube URL.
+        // The source is confirmed when the media element starts playing.
+        set({ playbackSource: /^https:\/\/[^/]+\/v1\/stream\/[A-Za-z0-9_-]{11}\?/.test(src)
+          ? "local" : "youtube" });
+      }
       media.src = src;
       if (autoplay) play(media);
     };
@@ -372,6 +395,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     status: saved.queue?.length ? "paused" : "idle",
     statusText: null,
     mediaKind: "audio",
+    playbackSource: "checking",
     videoNote: null,
     videoAspect: 16 / 9,
     position: saved.position ?? 0,

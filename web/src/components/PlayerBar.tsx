@@ -4,6 +4,7 @@ import { useT } from "../i18n";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi } from "../stores/ui";
 import { Artwork } from "./Artwork";
+import { AudioSourceBadge } from "./AudioSourceBadge";
 import { FavoriteButton, ModeSwitch, Scrubber, Transport, Volume } from "./Controls";
 import { IconButton } from "./IconButton";
 
@@ -37,6 +38,7 @@ export function PlayerBar() {
                 <p className={cn("truncate text-[13px]", status === "error" ? "text-danger" : "text-fg-2")}>
                   {statusText ?? track.artist}
                 </p>
+                <AudioSourceBadge compact />
               </div>
               <FavoriteButton track={track} size="sm" />
             </>

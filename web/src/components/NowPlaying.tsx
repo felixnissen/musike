@@ -16,6 +16,7 @@ import type { Track } from "../lib/types";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { useUi, type PanelTab } from "../stores/ui";
 import { Artwork } from "./Artwork";
+import { AudioSourceBadge } from "./AudioSourceBadge";
 import { FavoriteButton, ModeSwitch, Scrubber, Transport } from "./Controls";
 import { IconButton } from "./IconButton";
 import { QueueList } from "./Queue";
@@ -273,7 +274,10 @@ export function NowPlayingSheet({ open, onClose }: { open: boolean; onClose: () 
               <IconButton label={t.common.close} onClick={onClose} className="-ml-2 text-fg">
                 <CaretDownIcon size={24} />
               </IconButton>
-              <div className="mx-auto mt-0 h-1 w-10 rounded-full bg-fg-3/50" />
+              <div className="flex items-center gap-2">
+                <div className="h-1 w-10 rounded-full bg-fg-3/50" />
+                <AudioSourceBadge compact />
+              </div>
               <div className="flex gap-1">
                 <IconButton
                   label={view === "lyrics" ? "Tillbaka till spelaren" : "Visa låttext"}

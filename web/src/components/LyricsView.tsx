@@ -7,6 +7,7 @@ export function LyricsView({ compact = false }: { compact?: boolean }) {
   const position = usePlayer((s) => s.position);
   const seek = usePlayer((s) => s.seek);
   const [lines, setLines] = useState<LyricLine[]>([]);
+  const [source, setSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const active = lyricAt(lines, position);
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -14,11 +15,15 @@ export function LyricsView({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     setLines([]);
-    if (!currentId) return;
+    setSource(null);
+    if (!track || !currentId) return;
     const ctrl = new AbortController();
     setLoading(true);
-    void fetchLyrics(currentId, ctrl.signal).then((result) => {
-      if (!ctrl.signal.aborted) setLines(result);
+    void fetchLyrics(track, ctrl.signal).then((result) => {
+      if (!ctrl.signal.aborted) {
+        setLines(result.lines);
+        setSource(result.source);
+      }
     }).finally(() => {
       if (!ctrl.signal.aborted) setLoading(false);
     });
@@ -34,12 +39,13 @@ export function LyricsView({ compact = false }: { compact?: boolean }) {
   if (!lines.length) return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-5 py-8 text-center">
       <p className="text-sm font-medium">Ingen synkad låttext hittades</p>
-      <p className="text-xs text-fg-2">Låttexter visas från MusicGrabbers .lrc-filer när en matchande inspelning finns i biblioteket.</p>
+      <p className="text-xs text-fg-2">Ingen matchande tidsstämplad text finns i MusicGrabber eller LRCLIB för den här inspelningen.</p>
     </div>
   );
 
   return (
     <div aria-label="Synkad låttext" className={"scroll-area h-full max-h-full overflow-y-auto overscroll-contain text-center " + (compact ? "px-2 py-5" : "px-3 py-8")}>
+      <p className="mb-3 text-center text-[11px] text-fg-3">Synkad text: {source === "LRCLIB" ? "LRCLIB" : "MusicGrabber"}</p>
       <div className={"mx-auto flex max-w-lg flex-col items-center gap-5 " + (compact ? "pb-20" : "pb-32")}>
         {lines.map((line, index) => (
           <button

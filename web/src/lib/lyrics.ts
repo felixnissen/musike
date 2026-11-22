@@ -36,26 +36,82 @@ export function lyricAt(lines: LyricLine[], position: number): number {
   }
   return lo - 1;
 }
-export async function fetchLyrics(id: string, signal?: AbortSignal): Promise<LyricLine[]> {
-  // On Android, only the authenticated MusicGrabber peer can provide sidecars.
-  // The desktop build's normal same-origin API does not need a pairing token.
+
+/** The user's own sidecar is always the first choice.
+ * LRCLIB is only consulted when local lyrics are missing; exact title/artist
+ * and duration protect against using lyrics for the wrong recording.
+ */
+export interface LyricsResult { lines: LyricLine[]; source: "MusicGrabber" | "LRCLIB" | null }
+export interface LyricsTrack { id: string; title: string; artist: string; duration: number }
+const fallbackCache = new Map<string, { until: number; result: LyricsResult }>();
+const norm = (v: string) => v.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+
+async function lrclib(track: LyricsTrack, signal?: AbortSignal): Promise<LyricsResult> {
+  const cacheKey = track.id + ":" + track.duration;
+  const cached = fallbackCache.get(cacheKey);
+  if (cached && Date.now() < cached.until) return cached.result;
+  const missing: LyricsResult = { lines: [], source: null };
+  if (track.title.length > 250 || track.artist.length > 250 || !track.artist.trim()) return missing;
+  try {
+    const params = new URLSearchParams({ track_name: track.title, artist_name: track.artist });
+    const response = await fetch("https://lrclib.net/api/search?" + params, {
+      headers: { "Lrclib-Client": "Musike/1.5.1 (personal library lyrics)" },
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(6000)]) : AbortSignal.timeout(6000),
+    });
+    if (!response.ok) return missing;
+    const entries = await response.json() as Array<{
+      trackName?: string; artistName?: string; duration?: number; instrumental?: boolean; syncedLyrics?: string;
+    }>;
+    if (!Array.isArray(entries)) return missing;
+    const title = norm(track.title);
+    const artist = norm(track.artist);
+    const matches = entries.filter((entry) =>
+      typeof entry.trackName === "string" && norm(entry.trackName) === title &&
+      typeof entry.artistName === "string" && norm(entry.artistName) === artist &&
+      typeof entry.syncedLyrics === "string" && entry.syncedLyrics.length < 512_000 &&
+      !entry.instrumental &&
+      Number.isFinite(entry.duration) && Math.abs(Number(entry.duration) - track.duration) <= 5
+    );
+    matches.sort((a,b) => Math.abs(Number(a.duration) - track.duration) - Math.abs(Number(b.duration) - track.duration));
+    const lines = matches.length ? parseLrc(matches[0].syncedLyrics!) : [];
+    const result: LyricsResult = { lines, source: lines.length ? "LRCLIB" : null };
+    fallbackCache.set(cacheKey, { result, until: Date.now() + (lines.length ? 12 * 3600_000 : 30 * 60_000) });
+    return result;
+  } catch {
+    return missing;
+  }
+}
+export async function fetchLyrics(track: LyricsTrack, signal?: AbortSignal): Promise<LyricsResult> {
+  // Private LAN-side LRC files take precedence, with no third-party requests
+  // for a song for which the user already owns timed lyric metadata.
   const mobile = import.meta.env.MODE === "native";
-  let url: string;
+  let url = "";
   if (mobile) {
     const raw = localStorage.getItem("musike:music-peer:v1");
-    if (!raw) return [];
-    let data: { url?: string; token?: string };
-    try { data = JSON.parse(raw); } catch { return []; }
-    if (!data.url || !/^https:\/\//i.test(data.url) || !/^[a-f0-9]{64}$/.test(data.token ?? "")) return [];
-    url = data.url.replace(/\/+$/, "") + "/v1/lyrics/" + encodeURIComponent(id) + "?token=" + data.token;
-  } else {
-    url = "/api/lyrics/" + encodeURIComponent(id);
+    if (raw) {
+      try {
+        const data = JSON.parse(raw) as { url?: string; token?: string };
+        if (data.url && /^https:\/\//i.test(data.url) && /^[a-f0-9]{64}$/.test(data.token ?? ""))
+          url = data.url.replace(/\/+$/, "") + "/v1/lyrics/" + encodeURIComponent(track.id) + "?token=" + data.token;
+      } catch { /* Try public fallback */ }
+    }
+  } else url = "/api/lyrics/" + encodeURIComponent(track.id);
+  if (url) {
+    try {
+      const res = await fetch(url, {
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4500)]) : AbortSignal.timeout(4500),
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const value = await res.json() as { text?: string; format?: string };
+        if (value.format === "lrc" && typeof value.text === "string") {
+          const lines = parseLrc(value.text);
+          if (lines.length) return { lines, source: "MusicGrabber" };
+        }
+      }
+    } catch { /* Local peer unavailable: try LRCLIB, not an unrelated local file */ }
   }
-  try {
-    const res = await fetch(url, { signal, cache: "no-store" });
-    if (!res.ok) return [];
-    const value = await res.json() as { text?: string; format?: string };
-    if (value.format !== "lrc" || typeof value.text !== "string") return [];
-    return parseLrc(value.text);
-  } catch { return []; }
+  if (signal?.aborted) return { lines: [], source: null };
+  return lrclib(track, signal);
 }

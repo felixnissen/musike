@@ -5,6 +5,7 @@ import { useT } from "../i18n";
 import { NOW_PLAYING_HASH, paths } from "../lib/routes";
 import { selectCurrent, usePlayer, useStatusText } from "../player/player";
 import { Artwork } from "./Artwork";
+import { AudioSourceBadge } from "./AudioSourceBadge";
 import { PlayPauseIcon } from "./Controls";
 
 const tabs = [
@@ -81,6 +82,7 @@ export function MiniPlayer() {
               <span className={cn("block truncate text-xs", status === "error" ? "text-danger" : "text-fg-2")}>
                 {statusText ?? track.artist}
               </span>
+              <span className="mt-0.5 block"><AudioSourceBadge compact /></span>
             </span>
           </button>
           <button

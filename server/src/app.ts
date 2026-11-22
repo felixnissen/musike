@@ -158,6 +158,12 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return { format: "lrc", text: lrc, source: "MusicGrabber" };
   });
 
+  // Lightweight truthful source probe; never returns a filesystem path.
+  app.get("/api/local/track/:id", async (req) => {
+    const track = await knownTrack(videoId(req.params));
+    return { local: !!(track && await localAudio(track)) };
+  });
+
   app.get("/api/local/status", () => localMusicStatus());
 
   // Only accessible from the desktop app's loopback origin.
