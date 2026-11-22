@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { capabilities } from "../lib/api";
-import { checkPeer, readPeer, savePeer } from "../lib/peerConfig";
+import { diagnosePeer, readPeer, savePeer } from "../lib/peerConfig";
 
 interface Pairing { enabled: boolean; port?: number; token?: string }
 export function PeerMusicSection() {
@@ -19,8 +19,7 @@ export function PeerMusicSection() {
     const value = { url: url.trim().replace(/\/+$/, ""), token: token.trim() };
     try {
       savePeer(value);
-      setMessage(await checkPeer(value) ? "Connected! Local music will be preferred." :
-        "Not reachable. YouTube Music remains available as usual.");
+      setMessage((await diagnosePeer(value)).message);
     } catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
   }

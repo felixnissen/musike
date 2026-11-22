@@ -11,7 +11,7 @@ export async function streamWithPeer(id: string): Promise<string> {
       (rejects.get(id) ?? 0) < Date.now()) {
     const endpoint = peer.url + "/v1/available/" + encodeURIComponent(id) + "?token=" + peer.token;
     try {
-      const response = await fetch(endpoint, { signal: AbortSignal.timeout(1300), cache: "no-store" });
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(5000), cache: "no-store" });
       if (response.ok && (await response.json()).available === true) {
         return peer.url + "/v1/stream/" + encodeURIComponent(id) + "?token=" + peer.token;
       }
