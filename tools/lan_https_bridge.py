@@ -11,6 +11,7 @@ import pathlib
 import socket
 import ssl
 import sys
+import time
 from urllib.parse import urlsplit
 
 APP_DATA = pathlib.Path(os.environ.get("APPDATA", str(pathlib.Path.home()/"AppData/Roaming")))/"Musike"/"data"/"lan-bridge"
@@ -45,6 +46,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if value:headers[name]=value
             conn.request(self.command,self.path,body=body,headers=headers)
             remote=conn.getresponse()
+            self._upstream_started=True
             self.send_response(remote.status)
             excluded={"connection","transfer-encoding","keep-alive","date","server"}
             for key,val in remote.getheaders():
@@ -63,7 +65,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             conn.close()
             self.close_connection=True
     @property
-    def headers_sent(self): return getattr(self,"_headers_buffer",None) is None
+    def headers_sent(self): return getattr(self, "_upstream_started", False)
     def fail(self,status):
         body=b'{"error":"unavailable"}'
         self.send_response(status)
@@ -83,7 +85,27 @@ def run():
     assert ipaddress.ip_address(HOST).is_private, "LAN bridge requires a private address"
     if not CERT.is_file() or not KEY.is_file():
         raise RuntimeError("Certificates missing. Run setup script before bridge.")
-    listener=http.server.ThreadingHTTPServer((HOST,PORT),Handler)
+    # Windows may launch Startup applications before DHCP assigns the LAN IP.
+    # Retry quietly; never open a console or weaken the firewall.
+    # Windows can allow multiple sockets with SO_REUSEADDR; proactively
+    # detect an existing instance before trying to bind again.
+    try:
+        with socket.create_connection((HOST, PORT), timeout=0.6):
+            return
+    except OSError:
+        pass
+    listener=None
+    for _ in range(120):
+        try:
+            listener=http.server.ThreadingHTTPServer((HOST,PORT),Handler)
+            break
+        except OSError as exc:
+            code=getattr(exc,"winerror",None) or exc.errno
+            if code==10048: return  # Another Musike LAN bridge already runs
+            if code!=10049: raise
+            time.sleep(2)
+    if listener is None:
+        raise RuntimeError("LAN address not available after startup retry")
     ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.minimum_version=ssl.TLSVersion.TLSv1_2
     ctx.load_cert_chain(str(CERT),str(KEY))
