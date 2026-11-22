@@ -2,6 +2,7 @@ import { ClockCounterClockwiseIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } f
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { Artwork } from "../components/Artwork";
+import { MaestroDJ } from "../components/MaestroDJ";
 import { LogoMark } from "../components/Brand";
 import { PageHeader, Section } from "../components/Page";
 import { TrackList, TrackListSkeleton } from "../components/TrackList";
@@ -66,6 +67,8 @@ export default function Home() {
       <div className="px-4 pt-2 pb-6 md:px-6 md:pt-8">
         <h1 className="text-[28px] leading-tight font-semibold tracking-tight md:text-4xl">{t.time.greeting(new Date().getHours())}</h1>
       </div>
+
+      {status === "ready" && <div className="pb-5"><MaestroDJ /></div>}
 
       {status === "loading" && <TrackListSkeleton rows={6} />}
 

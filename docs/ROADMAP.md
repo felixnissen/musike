@@ -71,6 +71,7 @@ Status: planeringsdokument. **En ej ikryssad ruta är inte implementerad.**
 - [ ] **MUS-404 Prompt-spellistor.** Regelbaserad första version med genre, tempo, energi, tid på dygnet och textfilter. Sparbar och redigerbar spellista; ingen obligatorisk molnmodell.
 - [ ] **MUS-405 Embeddings valfritt.** Benchmarka CLAP/Essentia-feature-vektorer mot metadata-only ranking. Kör batchvis lokalt på Windows; förhindra tung inferens på telefonen.
 - [ ] **MUS-406 Återupptäck.** Personligt ”glömda favoriter”, smakhistorik och slumpkontroller; välj bort spår utan tillräcklig historik.
+- [ ] **MUS-407 Maestro DJ v1 – situationslägen.** Fem lägen, val av spellistor per läge, viktning efter lyssning/skips, Smart Shuffle och fortsättning i samma läge. **Kodad + automatiskt testad 2026-11-22; manuell Android-provlyssning återstår.** Se [maestro-dj.md](maestro-dj.md).
 
 ## P5 – Poddar och talat innehåll som egen modul
 

@@ -4,6 +4,7 @@ import { api, capabilities, explainStreamError, markStreamFailure, streamSource,
 import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
 import { recordSmartPlay, recordSmartSkip, smartShuffle, type ShuffleMode } from "../lib/smartShuffle";
+import { createDJMix, getActiveDJMode, readDJPreferences, recordDJPlay, setActiveDJMode } from "../lib/maestroDJ";
 import { warmupTrack } from "../lib/warmup";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
@@ -253,8 +254,24 @@ export const usePlayer = create<PlayerState>((set, get) => {
     set({ status: "loading", statusText: "fetchingRadio" });
     try {
       const known = new Set(get().queue.map((t) => t.id));
-      const more = (await api.radio(last.id)).filter((t) => !known.has(t.id)).slice(0, 25);
-      if (!more.length) throw new Error("empty");
+      const activeMode = getActiveDJMode();
+      let more: Track[] = [];
+      if (activeMode) {
+        // Continue a Maestro session from its own chosen mood, not generic
+        // YouTube radio. Never repeat a song already in the current queue.
+        const prefs = { ...readDJPreferences(), mode: activeMode };
+        const lib = useLibrary.getState();
+        const suggested = createDJMix(lib, prefs, { size: 150 });
+        more = suggested.tracks.filter((t) => !known.has(t.id)).slice(0, 25);
+      } else {
+        more = (await api.radio(last.id)).filter((t) => !known.has(t.id)).slice(0, 25);
+      }
+      if (!more.length) {
+        // A curated mood can be smaller than its initial batch. Stop cleanly
+        // rather than forcing irrelevant songs or a tight repeat loop.
+        set({ status: "paused", statusText: null, position: 0 });
+        return;
+      }
       set((st) => ({
         queue: [...st.queue, ...more],
         original: st.original ? [...st.original, ...more] : null,
@@ -273,6 +290,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     recordedToken = token;
     useLibrary.getState().recordPlay(track);
     recordSmartPlay(track);
+    recordDJPlay(track);
     // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
     const upcoming = s.queue[s.index + 1];
     if (!upcoming) return;
@@ -418,6 +436,9 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     playList: (tracks, start = 0) => {
       if (!tracks.length) return;
+      // A normal playlist ends the previous DJ session. Maestro starts
+      // its new mode immediately AFTER handing the queue to this method.
+      setActiveDJMode(null);
       const first = tracks[start] ?? tracks[0];
       if (get().shuffle) {
         const rest = tracks.filter((_, i) => i !== start);
@@ -521,7 +542,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const current = s.queue[s.index];
       if (current && s.status === "playing" && s.duration > 20 &&
           s.position >= 3 && s.position < Math.min(45, s.duration * 0.45))
-        recordSmartSkip(current);
+        { recordSmartSkip(current); recordDJPlay(current, true); }
       if (s.index < s.queue.length - 1) return load(s.index + 1);
       if (s.repeat === "all" && s.queue.length) return load(0);
       if (s.autoRadio) void continueWithRadio();
