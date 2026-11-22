@@ -3,7 +3,7 @@
  * They are kept as keys and translated when sent, so each device gets its own language.
  */
 
-export type Lang = "en" | "pt-BR";
+export type Lang = "en" | "pt-BR" | "sv";
 type Params = Record<string, string | number>;
 
 const en = {
@@ -106,7 +106,56 @@ const pt: Record<MsgKey, string> = {
   ffmpegPackage: "Pacote do FFmpeg inesperado.",
 };
 
-const CATALOG: Record<Lang, Record<MsgKey, string>> = { en, "pt-BR": pt };
+const sv: Record<MsgKey, string> = {
+  invalidVideoId: "Ogiltigt video-ID.",
+  emptyQuery: "Skriv något att söka efter.",
+  searchFailed: "Sökningen är inte tillgänglig just nu ({detail}). Försök igen om en stund.",
+  missingTitle: "Ange låtens titel.",
+  notBackup: "Den här filen är ingen säkerhetskopia från Musike.",
+  newerBackup: "Säkerhetskopian kommer från en nyare Musike-version. Uppdatera appen först.",
+  idMismatch: "ID:t stämmer inte.",
+  tracksRequired: "Skicka en lista med låtar.",
+  invalidGenre: "Ogiltig genre.",
+  invalidOffset: "Ogiltig position.",
+  invalidArtist: "Ogiltig artist.",
+  routeNotFound: "Sökvägen hittades inte.",
+  noFreePort: "Ingen ledig port mellan {from} och {to}.",
+  invalidTrack: "Ogiltigt spår.",
+  playlistNotFound: "Spellistan hittades inte.",
+  playlistNameRequired: "Ange ett namn på spellistan.",
+  genresUnavailable: "Det gick inte att läsa in genrer. Försök igen.",
+  genreUnavailable: "Det gick inte att öppna genren. Försök igen.",
+  genreEmpty: "Inget hittades för genren.",
+  artistUnavailable: "Det gick inte att öppna artisten. Försök igen.",
+  artistNotFound: "Artisten hittades inte.",
+  albumUnavailable: "Det gick inte att öppna albumet. Försök igen.",
+  albumNotFound: "Albumet hittades inte.",
+  invalidAlbum: "Ogiltigt album.",
+  ytdlpMissing: "yt-dlp hittades inte på datorn. Öppna Musikes inställningar för att installera det.",
+  ytdlpTimeout: "yt-dlp tog för lång tid på sig att svara.",
+  ytdlpCantRun: "Kunde inte köra yt-dlp ({error}). Öppna Musikes inställningar.",
+  botCheck: "YouTube kräver att anslutningen bekräftar att den inte är en bot. Stäng av eventuell VPN och försök igen.",
+  videoUnavailable: "Videon är inte tillgänglig på YouTube.",
+  ageRestricted: "Åldersbegränsad video. Kräver cookies från ett inloggat konto.",
+  ytdlpFailed: "yt-dlp misslyckades.",
+  ytdlpOutdated: "{detail} YouTube kan ha ändrats. Uppdatera yt-dlp i inställningarna.",
+  noAudio: "Inget ljudformat är tillgängligt för videon.",
+  noSdVideo: "Videon saknar kombinerad SD-version. Använd HD.",
+  streamRefused: "YouTube nekade ljudströmmen (HTTP {status}). Prova att uppdatera yt-dlp i inställningarna.",
+  noWinget: "yt-dlp hittades inte och winget saknas. Installera manuellt: https://github.com/yt-dlp/yt-dlp",
+  installingYtdlp: "Installerar yt-dlp",
+  updatingYtdlp: "Uppdaterar yt-dlp",
+  directUpdateFailed: "Direktuppdatering misslyckades, försöker med winget",
+  downloadingTools: "Laddar ned yt-dlp och Deno från GitHub",
+  alreadyLatest: "Du har redan den senaste versionen ({version})",
+  ytdlpReady: "yt-dlp {version} är redo att användas",
+  updateFailed: "Kunde inte uppdatera yt-dlp.",
+  toolMissing: "{tool} hittades inte på datorn.",
+  downloadFailed: "Nedladdning av {tool} misslyckades (HTTP {status}).",
+  ffmpegPackage: "Oväntat FFmpeg-paket.",
+};
+
+const CATALOG: Record<Lang, Record<MsgKey, string>> = { en, "pt-BR": pt, sv };
 
 /** A message translated when it is sent: a key plus the values for its {placeholders}. */
 export interface Msg {
@@ -124,7 +173,7 @@ export function tr(lang: Lang, text: Text): string {
   return CATALOG[lang][text.key].replace(/\{(\w+)\}/g, (all, name: string) => String(text.params?.[name] ?? all));
 }
 
-export const isLang = (v: unknown): v is Lang => v === "en" || v === "pt-BR";
+export const isLang = (v: unknown): v is Lang => v === "en" || v === "pt-BR" || v === "sv";
 
 /** The language a request asked for. The app always says; anything else (media elements, curl) gets English. */
 export function langOf(req: { headers: Record<string, string | string[] | undefined> }): Lang {
@@ -133,4 +182,4 @@ export function langOf(req: { headers: Record<string, string | string[] | undefi
 }
 
 /** The code YouTube Music uses for its own words (genre names, artist bios). */
-export const youtubeLang = (lang: Lang) => (lang === "pt-BR" ? "pt" : "en");
+export const youtubeLang = (lang: Lang) => lang === "pt-BR" ? "pt" : lang === "sv" ? "sv" : "en";
