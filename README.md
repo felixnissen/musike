@@ -479,3 +479,8 @@ Musike is a project for **personal and educational use**. Playing YouTube conten
 ## License
 
 [MIT](LICENSE) © 2026 Ernani Neto
+
+
+## Utvecklingsplan
+
+Den prioriterade produktbackloggen med färdigkriterier finns i [docs/ROADMAP.md](docs/ROADMAP.md).
