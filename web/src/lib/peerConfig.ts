@@ -1,10 +1,11 @@
 const KEY = "musike:music-peer:v1";
+const suggestedLanUrl = import.meta.env.VITE_MUSIKE_LAN_URL || "";
 export interface PeerConfig { url: string; token: string }
 export function readPeer(): PeerConfig {
   try {
     const data = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<PeerConfig>;
-    return { url: typeof data.url === "string" ? data.url : "", token: typeof data.token === "string" ? data.token : "" };
-  } catch { return { url: "", token: "" }; }
+    return { url: typeof data.url === "string" && data.url ? data.url : suggestedLanUrl, token: typeof data.token === "string" ? data.token : "" };
+  } catch { return { url: suggestedLanUrl, token: "" }; }
 }
 export function savePeer(config: PeerConfig): void {
   const url = config.url.trim().replace(/\/+$/, "");

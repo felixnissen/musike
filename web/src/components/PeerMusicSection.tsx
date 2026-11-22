@@ -30,7 +30,7 @@ export function PeerMusicSection() {
       {desktop ? <>
         <p className="text-sm text-fg-2">Musike automatically plays matching songs from your MusicGrabber folder, then falls back to YouTube.</p>
         {pair?.enabled ? <>
-          <p className="text-xs text-fg-2">Private music service: 127.0.0.1:{pair.port}. Publish only through a private HTTPS tunnel (such as Tailscale Serve). Never forward this port directly from your router.</p>
+          <p className="text-xs text-fg-2">Private music service: 127.0.0.1:{pair.port}. Use the HTTPS mini-server on the home Wi-Fi, or a private HTTPS tunnel away from home. Never forward the port from your router.</p>
           <label className="text-xs text-fg-2" htmlFor="peer-key">Pairing key for your phone</label>
           <input id="peer-key" type="password" readOnly value={pair.token || ""} className="w-full rounded-xl bg-bg p-2 font-mono text-xs text-fg" />
           <button type="button" className="rounded-full bg-surface-3 px-4 py-2 text-sm" onClick={() => void navigator.clipboard.writeText(pair.token || "")}>
@@ -39,8 +39,8 @@ export function PeerMusicSection() {
         </> : <p className="text-sm text-fg-2">Private music service is not running.</p>}
       </> : <>
         <p className="text-sm text-fg-2">Use your PC music when connected to its private HTTPS endpoint. YouTube remains the automatic fallback.</p>
-        <label className="text-xs text-fg-2" htmlFor="peer-url">Private HTTPS address (Tailscale Serve)</label>
-        <input id="peer-url" autoCapitalize="off" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://your-computer.tailnet.ts.net" className="w-full rounded-xl bg-bg p-2 text-sm text-fg" />
+        <label className="text-xs text-fg-2" htmlFor="peer-url">Privat HTTPS-adress (hemma-Wi-Fi eller privat tunnel)</label>
+        <input id="peer-url" autoCapitalize="off" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://192.168.0.41:4284" className="w-full rounded-xl bg-bg p-2 text-sm text-fg" />
         <label className="text-xs text-fg-2" htmlFor="peer-token">Pairing key from PC</label>
         <input id="peer-token" type="password" autoCapitalize="off" value={token} onChange={(e) => setToken(e.target.value)} className="w-full rounded-xl bg-bg p-2 font-mono text-xs text-fg" />
         <button type="button" disabled={busy} className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-ink" onClick={() => void test()}>
