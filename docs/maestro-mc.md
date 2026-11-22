@@ -33,3 +33,12 @@ Inställningen sparas lokalt under `musike:maestro-mc:v1`. Övrig uppspelning oc
 - Detta är en enkel lokal MC med en färdig fras, inte en AI som skapar faktagranskade radiomanus eller variationsrika presentationer. Det är nästa separata funktion, inte del av denna fokuserade leverans.
 - Volym-sänkningen sker via befintligt media-element, inte en full Web Audio mixer. Inga två musikdeck eller beatmatching har byggts.
 - Tester bekräftar TypeScript och algoritmer; de bevisar **inte** fysiskt hörbart svenskt tal på användarens telefon utan ett faktiskt ljudprov.
+
+## 2026-11-22: Android-röstfix
+
+Första versionen kunde bli helt tyst eftersom Android WebView inte alltid exponerar talsyntesröster, och Web Speech-filtreringen krävde \`localService\`. Ersatt på Android av native Capacitor-registrerad \`MusikeMC\` som använder Androids \`TextToSpeech\` direkt.
+
+- \`mobile/android/app/src/main/java/app/musike/android/MusikeMCPlugin.java\`: init, svensk \`sv-SE\` offline-röst, tal/stop, fel och uppläsningsslut. Kräver lokalt installerad svensk voice och förhindrar nätberoende TTS-röster.
+- \`web/src/lib/maestroMC.ts\`: identifierar Android och går via native TTS; i web/desktop används befintligt Web Speech-läge. Volymen återställs efter avslut/fel.
+- \`web/src/components/MaestroDJ.tsx\`: visar röststatus och fel vid misslyckad provuppläsning.
+- Android APK kompilerad och signerad, men verkligt ljud på användarens Android-telefon kan inte bekräftas utan fysisk provlyssning.
