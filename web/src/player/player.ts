@@ -5,6 +5,7 @@ import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
 import { recordSmartPlay, recordSmartSkip, smartShuffle, type ShuffleMode } from "../lib/smartShuffle";
 import { createDJMix, getActiveDJMode, readDJPreferences, recordDJPlay, setActiveDJMode } from "../lib/maestroDJ";
+import { applyMCVolume, isMCEligibleTrack, mcAnnouncement, readMCCadence, shouldMCAnnounce, speakMC, stopMC } from "../lib/maestroMC";
 import { warmupTrack } from "../lib/warmup";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
@@ -85,6 +86,8 @@ let loaded: { id: string; kind: Kind; quality: Quality } | null = null;
 let pendingSeek = 0;
 let token = 0;
 let recordedToken = -1;
+let mcSessionMode: string | null = null;
+let mcSessionPlays = 0;
 
 const STORAGE_KEY = "musike:player";
 
@@ -162,6 +165,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
   }
 
   function load(index: number, opts: { autoplay?: boolean; startAt?: number } = {}) {
+    stopMC();
     const s = get();
     const track = s.queue[index];
     if (!track) return;
@@ -210,8 +214,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       duration: track.duration,
       buffered: 0,
     });
-    media.volume = s.volume;
-    media.muted = s.muted;
+    applyMCVolume(media, s.volume, s.muted);
     const currentLoad = token;
     const start = (src: string) => {
       if (currentLoad !== token) return;
@@ -291,6 +294,21 @@ export const usePlayer = create<PlayerState>((set, get) => {
     useLibrary.getState().recordPlay(track);
     recordSmartPlay(track);
     recordDJPlay(track);
+    const activeMode = getActiveDJMode();
+    if (activeMode !== mcSessionMode) {
+      mcSessionMode = activeMode;
+      mcSessionPlays = 0;
+    }
+    if (activeMode) {
+      mcSessionPlays++;
+      if (shouldMCAnnounce(readMCCadence(), mcSessionPlays) && isMCEligibleTrack(track)) {
+        // Talk only after playback is confirmed; the music never waits for a voice.
+        // No Wikipedia facts or model-generated claims until the metadata layer exists.
+        speakMC(mcAnnouncement(track), activeMedia(), () => ({
+          volume: get().volume, muted: get().muted,
+        }));
+      }
+    }
     // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
     const upcoming = s.queue[s.index + 1];
     if (!upcoming) return;
@@ -375,6 +393,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       syncPlaybackState();
     });
     media.addEventListener("pause", () => {
+      if (isActive()) stopMC();
       if (!isActive() || media.ended || get().status === "loading" || get().status === "error") return;
       set({ status: "paused" });
       syncPlaybackState();
@@ -555,6 +574,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     },
 
     seek: (seconds) => {
+      stopMC();
       const t = Math.max(0, Math.min(seconds, get().duration || seconds));
       set({ position: t });
       const media = activeMedia();
@@ -568,15 +588,16 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     setVolume: (v) => {
       const volume = Math.max(0, Math.min(1, v));
-      audio.volume = videoEl.volume = volume;
       const muted = volume === 0 ? true : false;
-      audio.muted = videoEl.muted = muted;
+      applyMCVolume(audio, volume, muted);
+      applyMCVolume(videoEl, volume, muted);
       set({ volume, muted });
     },
 
     toggleMute: () => {
       const muted = !get().muted;
-      audio.muted = videoEl.muted = muted;
+      applyMCVolume(audio, get().volume, muted);
+      applyMCVolume(videoEl, get().volume, muted);
       if (!muted && get().volume === 0) get().setVolume(0.6);
       else set({ muted });
     },

@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { createDJMix, DJ_MODES, readDJPreferences, saveDJPreferences, setActiveDJMode, type DJMode, type DJPreferences } from "../lib/maestroDJ";
 import { usePlayer } from "../player/player";
 import { useLibrary } from "../stores/library";
+import { availableSwedishMCVoice, previewMC, readMCCadence, saveMCCadence, stopMC, type MCCadence } from "../lib/maestroMC";
 
 const COPY = {
   sv: {
@@ -12,6 +13,7 @@ const COPY = {
     start:"Starta DJ", empty:"Lägg till favoriter eller spellistor för att börja.",
     ready:"låtar i mixen", sources:"spellistor valda", fallback:"Baserat på biblioteket", saved:"Valen sparas på den här enheten.",
     party:"Party",chill:"Chill",singalong:"Skriksjunga",night:"Nattkörning",custom:"Mitt läge",
+    mcTitle:"Svensk MC", mcHint:"Pratar kort om låten, utan att hitta på fakta. Kräver en svensk röst på enheten.", mcOff:"Tyst", mcOften:"Var 3:e låt", mcMedium:"Var 5:e låt", mcRare:"Var 8:e låt", mcNoVoice:"Ingen lokal svensk systemröst hittades. Musiken fortsätter utan prat.", mcPreview:"Prova rösten",
   },
   en: {
     title:"Maestro DJ",subtitle:"Choose a mood – Musike builds the queue.",
@@ -20,6 +22,7 @@ const COPY = {
     start:"Start DJ",empty:"Add some favorites or playlists to get started.",
     ready:"songs in the mix",sources:"playlists selected",fallback:"Based on your library",saved:"Settings are saved on this device.",
     party:"Party",chill:"Chill",singalong:"Sing along",night:"Night drive",custom:"My mode",
+    mcTitle:"Swedish MC", mcHint:"Short, factual Swedish song intros. Requires a Swedish voice installed on the device.", mcOff:"Silent", mcOften:"Every 3 songs", mcMedium:"Every 5 songs", mcRare:"Every 8 songs", mcNoVoice:"No local Swedish system voice found. Music keeps playing without speech.", mcPreview:"Test voice",
   },
   pt: {
     title:"Maestro DJ",subtitle:"Escolha o clima e o Musike monta a fila.",
@@ -28,12 +31,22 @@ const COPY = {
     start:"Iniciar DJ",empty:"Adicione favoritos ou playlists para começar.",
     ready:"músicas na seleção",sources:"playlists selecionadas",fallback:"Baseado na biblioteca",saved:"Configurações salvas neste dispositivo.",
     party:"Festa",chill:"Relaxar",singalong:"Cantar junto",night:"Dirigir à noite",custom:"Meu modo",
+    mcTitle:"Locutor sueco", mcHint:"Apresentações curtas em sueco. Requer voz sueca instalada no dispositivo.", mcOff:"Silêncio", mcOften:"A cada 3 músicas", mcMedium:"A cada 5 músicas", mcRare:"A cada 8 músicas", mcNoVoice:"Nenhuma voz sueca local. A música continua sem fala.", mcPreview:"Testar voz",
   },
 };
 export function MaestroDJ() {
   const lang = useI18n((s) => s.lang);
   const t = lang === "sv" ? COPY.sv : lang === "pt-BR" ? COPY.pt : COPY.en;
   const [prefs, setPrefs] = useState<DJPreferences>(readDJPreferences);
+  const [mcCadence, setMcCadence] = useState<MCCadence>(readMCCadence);
+  const [voiceAvailable, setVoiceAvailable] = useState(() => Boolean(availableSwedishMCVoice()));
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const refresh = () => setVoiceAvailable(Boolean(availableSwedishMCVoice()));
+    window.speechSynthesis.addEventListener("voiceschanged", refresh);
+    refresh();
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", refresh);
+  }, []);
   const { favorites, playlists, history } = useLibrary();
   const playList = usePlayer((s) => s.playList);
   const [started, setStarted] = useState(false);
@@ -110,6 +123,37 @@ export function MaestroDJ() {
         onChange={(e) => update({ ...prefs, familiar: Number(e.target.value) })}
         className="mt-2 w-full accent-[var(--accent)]" />
       <div className="flex justify-between text-[11px] text-fg-3"><span>{t.discovery}</span><span>{t.known}</span></div>
+      <div className="mt-4 rounded-xl border border-line bg-surface-3 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold">🎙️ {t.mcTitle}</p>
+          <button type="button" onClick={() => setVoiceAvailable(Boolean(availableSwedishMCVoice()))}
+            className="text-[11px] text-accent-text" aria-label="Uppdatera röster">↻</button>
+        </div>
+        <p className="mt-1 text-xs text-fg-2">{t.mcHint}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {([[0, t.mcOff], [3, t.mcOften], [5, t.mcMedium], [8, t.mcRare]] as const).map(([cadence, label]) => (
+            <button key={cadence} type="button" aria-pressed={mcCadence === cadence}
+              onClick={() => {
+                saveMCCadence(cadence);
+                setMcCadence(cadence);
+                if (cadence === 0) stopMC();
+                setVoiceAvailable(Boolean(availableSwedishMCVoice()));
+              }}
+              className={"rounded-full px-3 py-2 text-xs font-medium ring-1 transition-colors " +
+                (mcCadence === cadence ? "bg-accent-soft text-accent-text ring-accent/40" : "bg-surface-2 text-fg-2 ring-line")}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {voiceAvailable && (
+          <button type="button" onClick={() => previewMC()}
+            className="mt-3 rounded-full border border-line px-3 py-2 text-xs text-fg hover:bg-surface-4">
+            ▶ {t.mcPreview}
+          </button>
+        )}
+        {mcCadence > 0 && !voiceAvailable &&
+          <p role="status" className="mt-2 text-xs text-fg-2">{t.mcNoVoice}</p>}
+      </div>
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="min-w-0 text-xs text-fg-2">
           <p>{preview.candidates} {t.ready}</p>
