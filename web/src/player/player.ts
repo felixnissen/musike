@@ -231,7 +231,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       } else {
         // Android receives a direct private peer URL or a resolved YouTube URL.
         // The source is confirmed when the media element starts playing.
-        set({ playbackSource: /^https:\/\/[^/]+\/v1\/stream\/[A-Za-z0-9_-]{11}\?/.test(src)
+        set({ playbackSource: /\/v1\/stream\/[A-Za-z0-9_-]{11}\?/.test(src)
           ? "local" : "youtube" });
       }
       media.src = src;

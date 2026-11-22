@@ -1,5 +1,5 @@
 import { DotsThreeIcon, MagnifyingGlassIcon, PauseIcon, PencilSimpleIcon, PlayIcon, ShuffleIcon, TrashIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
@@ -30,10 +30,35 @@ export default function Collection({ kind }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [sortBy, setSortBy] = useState(() => localStorage.getItem("musike.collection.sort") || "default");
+  const [descending, setDescending] = useState(() => localStorage.getItem("musike.collection.desc") !== "false");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const t = useT();
 
   const playlist = kind === "playlist" ? lib.playlists.find((p) => p.id === id) : undefined;
   const tracks: Track[] = kind === "favorites" ? lib.favorites : kind === "history" ? lib.history : playlist?.tracks ?? [];
+  const visibleTracks = useMemo(() => {
+    const favoriteIds = new Set(lib.favorites.map((track) => track.id));
+    const result = tracks.map((track, index) => ({ track, index }))
+      .filter(({ track }) => !favoritesOnly || favoriteIds.has(track.id));
+    const compareText = (a: string, b: string) => a.localeCompare(b, "sv", { sensitivity: "base" });
+    if (sortBy !== "default") {
+      result.sort((a, b) => {
+        let comparison = 0;
+        switch (sortBy) {
+          case "title": comparison = compareText(a.track.title, b.track.title); break;
+          case "artist": comparison = compareText(a.track.artist, b.track.artist); break;
+          case "album": comparison = compareText(a.track.album || "", b.track.album || ""); break;
+          case "duration": comparison = a.track.duration - b.track.duration; break;
+          case "recent": comparison = a.index - b.index; break;
+        }
+        return (descending ? -comparison : comparison) || a.index - b.index;
+      });
+    }
+    return result.map(({ track }) => track);
+  }, [tracks, lib.favorites, favoritesOnly, sortBy, descending]);
+  const updateSort = (value: string) => { setSortBy(value); localStorage.setItem("musike.collection.sort", value); };
+  const updateDirection = () => { setDescending((old) => { localStorage.setItem("musike.collection.desc", String(!old)); return !old; }); };
   const name = kind === "favorites" ? t.nav.favorites : kind === "history" ? t.nav.recentlyPlayed : playlist?.name ?? "";
   const label =
     kind === "playlist" ? t.collection.labelPlaylist : kind === "favorites" ? t.collection.labelFavorites : t.collection.labelHistory;
@@ -91,7 +116,7 @@ export default function Collection({ kind }: Props) {
           label={playing ? t.common.pause : t.common.playX(name)}
           px={56}
           disabled={!tracks.length}
-          onClick={() => (isThisPlaying ? toggle() : playList(tracks, 0))}
+          onClick={() => (isThisPlaying ? toggle() : playList(visibleTracks, 0))}
         >
           {playing ? <PauseIcon size={24} weight="fill" /> : <PlayIcon size={24} weight="fill" />}
         </PlayDisc>
@@ -100,7 +125,7 @@ export default function Collection({ kind }: Props) {
           size="lg"
           disabled={!tracks.length}
           onClick={() => {
-            const order = shuffled(tracks);
+            const order = shuffled(visibleTracks);
             playList(order, 0);
           }}
         >
@@ -113,9 +138,16 @@ export default function Collection({ kind }: Props) {
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-3 md:px-6">
+        <select aria-label="Sortera låtar" value={sortBy} onChange={(event) => updateSort(event.target.value)} className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg">
+          <option value="default">Spellistans ordning</option><option value="recent">Senast tillagda / spelade</option><option value="title">Titel</option><option value="artist">Artist</option><option value="album">Album</option><option value="duration">Längd</option>
+        </select>
+        <button type="button" onClick={updateDirection} aria-label="Vänd sorteringsordning" className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm">{descending ? "↓" : "↑"}</button>
+        {kind !== "favorites" && <label className="flex items-center gap-2 text-sm text-fg-2"><input type="checkbox" checked={favoritesOnly} onChange={(event) => setFavoritesOnly(event.target.checked)} /> Endast favoriter</label>}
+      </div>
       <div className="px-2 md:px-3">
         {tracks.length > 0 ? (
-          <TrackList tracks={tracks} playlistId={playlist?.id} showAlbum />
+          <TrackList tracks={visibleTracks} playlistId={playlist?.id} showAlbum />
         ) : (
           <EmptyState
             icon={<MagnifyingGlassIcon size={28} />}

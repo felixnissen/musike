@@ -1,5 +1,5 @@
 import { ClockCounterClockwiseIcon, HeartIcon, MagnifyingGlassIcon, PlayIcon } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { Artwork } from "../components/Artwork";
 import { MaestroDJ } from "../components/MaestroDJ";
@@ -58,6 +58,7 @@ export default function Home() {
   const navigate = useNavigate();
   const t = useT();
   const show = useAppearance();
+  const [showDJ, setShowDJ] = useState(false);
   const empty = status === "ready" && !favorites.length && !playlists.length && !history.length;
 
   return (
@@ -68,7 +69,13 @@ export default function Home() {
         <h1 className="text-[28px] leading-tight font-semibold tracking-tight md:text-4xl">{t.time.greeting(new Date().getHours())}</h1>
       </div>
 
-      {status === "ready" && <div className="pb-5"><MaestroDJ /></div>}
+      {status === "ready" && <div className="px-4 pb-3 md:px-6"><Link to={paths.newReleases} className="inline-flex rounded-full bg-surface-2 px-3 py-2 text-xs font-semibold ring-1 ring-line">✨ Ny musik</Link></div>}
+      {status === "ready" && <div className="px-4 pb-5 md:px-6">
+        <button type="button" onClick={() => setShowDJ((value) => !value)} aria-expanded={showDJ} className="inline-flex items-center gap-2 rounded-full bg-surface-2 px-3 py-2 text-xs font-semibold ring-1 ring-line">
+          <span>🎧 DJ {showDJ ? "−" : "+"}</span>
+        </button>
+        {showDJ && <div className="-mx-4 mt-4 md:-mx-6"><MaestroDJ /></div>}
+      </div>}
 
       {status === "loading" && <TrackListSkeleton rows={6} />}
 

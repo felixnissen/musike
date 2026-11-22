@@ -96,7 +96,8 @@ export function createDJMix(
   const raw = fromPlaylist.length
     ? fromPlaylist
     : [...lib.favorites, ...lib.history, ...lib.playlists.flatMap((p) => p.tracks)];
-  const unique = [...new Map(raw.filter((t) => t?.id && t.kind === "song").map((t) => [t.id, t])).values()];
+  const eligible = prefs.mode === "singalong" ? raw.filter((t) => !/\b(instrumental|karaoke|no vocals|without vocals|backing track|minus one|playback version|instrumentale|instrumentalversion)\b/i.test(`${t.title} ${t.album ?? ""}`)) : raw;
+  const unique = [...new Map(eligible.filter((t) => t?.id && t.kind === "song").map((t) => [t.id, t])).values()];
   if (!unique.length) return { tracks: [], candidates: 0, matchedPlaylists: selected.length, basis: fromPlaylist.length ? "playlists" : "library" };
   const now = opts.now ?? Date.now();
   const plays = opts.events ?? readDJPlays(now);
