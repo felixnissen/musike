@@ -8,7 +8,7 @@ export interface NewRelease {
   type: string;
   url: string;
 }
-const CACHE = "musike:new-releases:v3";
+const CACHE = "musike:new-releases:v4";
 const DAY = 86_400_000;
 const BATCH_SIZE = 25;
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -29,6 +29,28 @@ function cached(): { at: number; artists: string; releases: NewRelease[]; checke
   } catch { return null; }
 }
 
+async function itunes<T>(url: string): Promise<T> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!response.ok) throw new Error("iTunes svarade " + response.status);
+  return response.json() as Promise<T>;
+}
+async function itunesReleases(name: string): Promise<NewRelease[]> {
+  const search = await itunes<{ results?: { artistId?: number; artistName?: string }[] }>(
+    "https://itunes.apple.com/search?term=" + encodeURIComponent(name) + "&entity=musicArtist&limit=10");
+  const artist = search.results?.find((a) => a.artistName?.toLocaleLowerCase() === name.toLocaleLowerCase());
+  if (!artist?.artistId) return [];
+  const data = await itunes<{ results?: { wrapperType?: string; collectionId?: number; collectionName?: string; releaseDate?: string; collectionType?: string }[] }>(
+    "https://itunes.apple.com/lookup?id=" + artist.artistId + "&entity=album&limit=200");
+  const cutoff = new Date(Date.now() - 180 * DAY).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  return (data.results ?? []).filter((a) => a.wrapperType === "collection" && !!a.collectionId &&
+    !!a.collectionName && !!a.releaseDate && a.releaseDate.slice(0, 10) >= cutoff &&
+    a.releaseDate.slice(0, 10) <= today).map((a) => ({
+      id: "itunes:" + a.collectionId, title: a.collectionName!, artist: name,
+      date: a.releaseDate!.slice(0, 10), type: a.collectionType ?? "Album",
+      url: "https://music.apple.com/album/id" + a.collectionId,
+    }));
+}
 async function mb<T>(path: string): Promise<T> {
   const response = await fetch("https://musicbrainz.org/ws/2/" + path, {
     headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000),
@@ -45,11 +67,11 @@ export async function discoverNewReleases(
   const previous = cached();
   if (!force && previous && previous.artists === signature && previous.nextIndex === 0 && Date.now() - previous.at < DAY)
     return { releases: previous.releases, updatedAt: previous.at, checked: previous.checked, attempted: previous.attempted, total: names.length, nextIndex: previous.nextIndex };
-  const start = previous?.artists === signature ? previous.nextIndex : 0;
+  const start = previous?.artists === signature && previous.nextIndex > 0 ? previous.nextIndex : 0;
   const batch = names.slice(start, start + BATCH_SIZE);
-  const results: NewRelease[] = previous?.artists === signature ? [...previous.releases] : [];
-  let attempted = previous?.artists === signature ? previous.attempted : 0;
-  let checked = previous?.artists === signature ? previous.checked : 0;
+  const results: NewRelease[] = previous?.artists === signature && start > 0 ? [...previous.releases] : [];
+  let attempted = previous?.artists === signature && start > 0 ? previous.attempted : 0;
+  let checked = previous?.artists === signature && start > 0 ? previous.checked : 0;
   let failures = 0;
   let lastRequest = 0;
   const request = async <T>(path: string) => {
@@ -65,7 +87,7 @@ export async function discoverNewReleases(
         "artist/?query=" + encodeURIComponent('artist:"' + artist.replace(/"/g, "") + '"') + "&fmt=json&limit=3",
       );
       const match = found.artists?.find((a) => a.name.toLocaleLowerCase() === artist.toLocaleLowerCase());
-      if (!match) continue;
+      if (!match) { results.push(...await itunesReleases(artist)); checked++; continue; }
       checked++;
       const groups = await request<{ "release-groups"?: { id: string; title: string; "first-release-date"?: string; "primary-type"?: string }[] }>(
         "release-group?artist=" + encodeURIComponent(match.id) + "&type=album|single|ep&limit=100&fmt=json",
@@ -81,6 +103,7 @@ export async function discoverNewReleases(
         allGroups.push(...more);
         if (more.length < 100) break;
       }
+      checked++;
       for (const g of allGroups) {
         const date = g["first-release-date"] ?? "";
         if (date.length < 10 || date < cutoff || date > today) continue;
@@ -91,13 +114,14 @@ export async function discoverNewReleases(
         });
       }
     } catch {
-      // One unavailable artist should not hide results already retrieved.
+      try { results.push(...await itunesReleases(artist)); checked++; }
+      catch { failures++; }
     }
   }
   const releases = [...new Map(results.map((r) => [r.id, r])).values()]
     .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
   if (failures === batch.length && batch.length > 0) throw new Error("MusicBrainz kunde inte nås. Tidigare resultat behålls.");
-  if (checked === 0 && attempted > 0 && results.length === 0) throw new Error("Inga artister kunde verifieras mot MusicBrainz.");
+  if (checked === 0 && attempted > 0 && results.length === 0) throw new Error("Inga artister kunde verifieras mot musikkatalogerna.");
   const updatedAt = Date.now();
   const nextIndex = start + batch.length >= names.length ? 0 : start + batch.length;
   const totalAttempted = attempted;
