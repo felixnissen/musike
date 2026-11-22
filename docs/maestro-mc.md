@@ -42,3 +42,14 @@ Första versionen kunde bli helt tyst eftersom Android WebView inte alltid expon
 - \`web/src/lib/maestroMC.ts\`: identifierar Android och går via native TTS; i web/desktop används befintligt Web Speech-läge. Volymen återställs efter avslut/fel.
 - \`web/src/components/MaestroDJ.tsx\`: visar röststatus och fel vid misslyckad provuppläsning.
 - Android APK kompilerad och signerad, men verkligt ljud på användarens Android-telefon kan inte bekräftas utan fysisk provlyssning.
+
+## 2026-11-22: MC-polish (språk, hörbarhet, variation)
+
+- Engelska som nytt förval i MC-inställningarna, svenska fortsatt valbart. Systemets lokala röstalternativ listas automatiskt för valt språk (Android native TTS, eller Web Speech lokalt på Windows).
+- Enkel valbar röst. Android-pluginen listar svenska/engelska offline-röster, väljer högkvalitativ lokal röst som default och kan spela användarens val.
+- Musikvolym vid tal sänkt från 28 % till **9 % som standard**. Skjutreglage 5–45 % ger användaren kontroll.
+- **Fix:** \`stopMC()\` återställer nu musiken via faktisk sparad restore-callback. Tidigare kod anropade ett icke-definierat \`restore\` och kunde kasta ReferenceError.
+- Provlyssning använder samma ducking som vanlig MC när låten är igång.
+- Fem korta variationsfraser per språk, inklusive albumfakta om de finns. Inga ogrundade berättelser eller nätanrop för factoids.
+- MC är alltjämt av som default och tal avbryts vid paus, låtbyte eller ljudfel.
+- Teststatus: statiska typer, enhetstester, produktionsbygge och signerad APK verifieras vid release. Äkta röster/hörbarhet behöver provlyssnas på fysisk telefon.

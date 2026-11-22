@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  mcAnnouncement, readMCCadence, saveMCCadence,
+  mcAnnouncement, readMCCadence, saveMCCadence, readMCSettings, saveMCSettings,
   shouldMCAnnounce, isMCEligibleTrack,
 } from "../../web/src/lib/maestroMC.js";
 
@@ -33,3 +33,19 @@ assert.equal(isMCEligibleTrack({ title: " ", artist: "M83" }), false);
 assert.equal(mcAnnouncement({ title: "Midnight City", artist: "M83" }),
   "Nu spelar vi Midnight City, med M83.");
 console.log("Maestro MC cadence, disabled mode, source-based script and persistence: OK");
+
+assert.equal(readMCSettings().language, "en-US", "New MC voice language defaults to English");
+assert.equal(readMCSettings().duckPercent, 9, "Voice gets strong 9% music bed");
+saveMCSettings({ language: "sv-SE", duckPercent: 19, voiceId: "sv-test" });
+assert.deepEqual(readMCSettings(), { language: "sv-SE", duckPercent: 19, voiceId: "sv-test" });
+saveMCSettings({ language: "en-US", duckPercent: 1, voiceId: "en-test" });
+assert.equal(readMCSettings().duckPercent, 5, "Ducking lower bound");
+saveMCSettings({ language: "en-US", duckPercent: 100, voiceId: "en-test" });
+assert.equal(readMCSettings().duckPercent, 45, "Ducking upper bound");
+assert.equal(mcAnnouncement({title:"Midnight City",artist:"M83",album:"Hurry Up, We're Dreaming"}, "en-US", 4),
+  "From the album Hurry Up, We're Dreaming, this is Midnight City by M83.");
+assert.equal(mcAnnouncement({title:"Midnight City",artist:"M83"}, "en-US", 0),
+  "Here's Midnight City, by M83.");
+assert.equal(new Set(Array.from({length: 5}, (_, i) =>
+  mcAnnouncement({title:"Midnight City",artist:"M83"}, "en-US", i))).size, 5, "Varied verified phrases");
+console.log("MC English/Swedish voices, configurable ducking and non-repeating intros: OK");

@@ -5,7 +5,7 @@ import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
 import { recordSmartPlay, recordSmartSkip, smartShuffle, type ShuffleMode } from "../lib/smartShuffle";
 import { createDJMix, getActiveDJMode, readDJPreferences, recordDJPlay, setActiveDJMode } from "../lib/maestroDJ";
-import { applyMCVolume, isMCEligibleTrack, mcAnnouncement, readMCCadence, shouldMCAnnounce, speakMC, stopMC } from "../lib/maestroMC";
+import { applyMCVolume, isMCEligibleTrack, mcAnnouncement, readMCCadence, readMCSettings, shouldMCAnnounce, speakMC, stopMC } from "../lib/maestroMC";
 import { warmupTrack } from "../lib/warmup";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
@@ -304,7 +304,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       if (shouldMCAnnounce(readMCCadence(), mcSessionPlays) && isMCEligibleTrack(track)) {
         // Talk only after playback is confirmed; the music never waits for a voice.
         // No Wikipedia facts or model-generated claims until the metadata layer exists.
-        speakMC(mcAnnouncement(track), activeMedia(), () => ({
+        const mcSettings = readMCSettings();
+        speakMC(mcAnnouncement(track, mcSettings.language, mcSessionPlays), activeMedia(), () => ({
           volume: get().volume, muted: get().muted,
         }));
       }
@@ -664,6 +665,14 @@ audio.volume = videoEl.volume = usePlayer.getState().volume;
 audio.muted = videoEl.muted = usePlayer.getState().muted;
 
 export const selectCurrent = (s: PlayerState): Track | null => s.queue[s.index] ?? null;
+
+/** Return the real current media element for MC preview/ducking without creating a second music player. */
+export function currentMCMedia(): HTMLMediaElement | null {
+  const state = usePlayer.getState();
+  if (!state.queue[state.index] || state.status !== "playing") return null;
+  return state.mediaKind === "video" ? videoEl : audio;
+}
+
 
 /** Whether the track can be shown as video (art tracks are audio with a still image). */
 
