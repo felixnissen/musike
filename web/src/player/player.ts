@@ -3,6 +3,7 @@ import { getT, useT } from "../i18n";
 import { api, capabilities, explainStreamError, markStreamFailure, streamSource, systemMedia, type ApiError, type ErrorCode } from "../lib/api";
 import { createAudio } from "../lib/audio";
 import { shuffled } from "../lib/format";
+import { recordSmartPlay, recordSmartSkip, smartShuffle, type ShuffleMode } from "../lib/smartShuffle";
 import { warmupTrack } from "../lib/warmup";
 import type { Track } from "../lib/types";
 import { useLibrary } from "../stores/library";
@@ -39,6 +40,7 @@ interface PlayerState {
   volume: number;
   muted: boolean;
   shuffle: boolean;
+  shuffleMode: ShuffleMode;
   repeat: Repeat;
   preferVideo: boolean;
   quality: Quality;
@@ -59,6 +61,7 @@ interface PlayerState {
   setVolume: (v: number) => void;
   toggleMute: () => void;
   toggleShuffle: () => void;
+  setShuffleMode: (mode: ShuffleMode) => void;
   cycleRepeat: () => void;
   setPreferVideo: (on: boolean) => void;
   setQuality: (q: Quality) => void;
@@ -92,6 +95,7 @@ interface Saved {
   volume: number;
   muted: boolean;
   shuffle: boolean;
+  shuffleMode: ShuffleMode;
   repeat: Repeat;
   preferVideo: boolean;
   quality: Quality;
@@ -268,6 +272,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     if (!track || recordedToken === token) return;
     recordedToken = token;
     useLibrary.getState().recordPlay(track);
+    recordSmartPlay(track);
     // Warm up the next track (and, in Video mode, find and resolve its clip) so it starts quickly.
     const upcoming = s.queue[s.index + 1];
     if (!upcoming) return;
@@ -404,6 +409,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
     volume: saved.volume ?? 0.9,
     muted: saved.muted ?? false,
     shuffle: saved.shuffle ?? false,
+    shuffleMode: saved.shuffleMode === "classic" ? "classic" : "smart",
     repeat: saved.repeat ?? "off",
     // Builds without video (Android) always play audio, whatever a backup or an old session says.
     preferVideo: capabilities.video && (saved.preferVideo ?? false),
@@ -415,7 +421,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const first = tracks[start] ?? tracks[0];
       if (get().shuffle) {
         const rest = tracks.filter((_, i) => i !== start);
-        set({ queue: [first, ...shuffled(rest)], original: tracks.slice() });
+        const ordered = get().shuffleMode === "smart"
+          ? smartShuffle(rest, { recent: useLibrary.getState().history, lastArtist: first.artist })
+          : shuffled(rest);
+        set({ queue: [first, ...ordered], original: tracks.slice() });
         load(0);
       } else {
         set({ queue: tracks.slice(), original: null });
@@ -509,6 +518,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
 
     next: () => {
       const s = get();
+      const current = s.queue[s.index];
+      if (current && s.status === "playing" && s.duration > 20 &&
+          s.position >= 3 && s.position < Math.min(45, s.duration * 0.45))
+        recordSmartSkip(current);
       if (s.index < s.queue.length - 1) return load(s.index + 1);
       if (s.repeat === "all" && s.queue.length) return load(0);
       if (s.autoRadio) void continueWithRadio();
@@ -552,7 +565,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const current = s.queue[s.index];
       if (!s.shuffle) {
         const rest = s.queue.filter((_, i) => i !== s.index);
-        set({ shuffle: true, original: s.queue, queue: current ? [current, ...shuffled(rest)] : shuffled(rest), index: 0 });
+        const ordered = s.shuffleMode === "smart"
+          ? smartShuffle(rest, { recent: useLibrary.getState().history, lastArtist: current?.artist })
+          : shuffled(rest);
+        set({ shuffle: true, original: s.queue, queue: current ? [current, ...ordered] : ordered, index: 0 });
         return;
       }
       const present = new Set(s.queue);
@@ -560,6 +576,26 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const extra = s.queue.filter((t) => !base.includes(t));
       const queue = [...base, ...extra];
       set({ shuffle: false, original: null, queue, index: Math.max(0, current ? queue.indexOf(current) : 0) });
+    },
+
+    setShuffleMode: (mode) => {
+      const s = get();
+      if (mode === s.shuffleMode) return;
+      // Switching strategy reshuffles only UPCOMING tracks, leaving played songs
+      // and current playback untouched; manually ordered queue is preserved
+      // until the user enables shuffle.
+      if (!s.shuffle || s.index >= s.queue.length - 1) {
+        set({ shuffleMode: mode });
+        return;
+      }
+      const ahead = s.queue.slice(s.index + 1);
+      const ordered = mode === "smart"
+        ? smartShuffle(ahead, {
+            recent: useLibrary.getState().history,
+            lastArtist: s.queue[s.index]?.artist,
+          })
+        : shuffled(ahead);
+      set({ shuffleMode: mode, queue: [...s.queue.slice(0, s.index + 1), ...ordered] });
     },
 
     cycleRepeat: () => {
@@ -601,6 +637,7 @@ function persist() {
     volume: s.volume,
     muted: s.muted,
     shuffle: s.shuffle,
+    shuffleMode: s.shuffleMode,
     repeat: s.repeat,
     preferVideo: s.preferVideo,
     quality: s.quality,

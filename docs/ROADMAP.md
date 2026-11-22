@@ -40,7 +40,7 @@ Status: planeringsdokument. **En ej ikryssad ruta är inte implementerad.**
 - [ ] **MUS-101 Waveform-indexering.** Förberäkna 200–400 peak-värden per lokal ljudfil, med durationsreferens, filfingeravtryck och analysversion. Inkrementellt vid nya nedladdningar; ingen nyanalys för oförändrade filer.
 - [ ] **MUS-102 WaveformScrubber.** Klick/drag för seek, progress, buffring, tangentbordsstöd, tillgänglighet, fall tillbaka till nuvarande tidslinje utan peaks. Test på mobil och desktop.
 - [ ] **MUS-103 Dynamiska omslagsfärger.** Cachelagra 2–4 färgtokens per omslag. Respektera reduced-motion, låg batterinivå och prestandaläge.
-- [ ] **MUS-104 Smart Shuffle v1.** Reproducerbar seed; viktning efter senaste uppspelning, skip och artistspacing. Ingen omedelbar repetition när alternativ finns. Knapp för vanlig shuffle.
+- [ ] **MUS-104 Smart Shuffle v1.** Reproducerbar seed; viktning efter senaste uppspelning, skip och artistspacing. Ingen omedelbar repetition när alternativ finns. Knapp för vanlig shuffle. **Kodad och automatiskt testad 2026-11-22; fysisk Android-regression och installerat UI kvar före [x].** Se [smart-shuffle.md](smart-shuffle.md).
 - [ ] **MUS-105 Smakregler.** Snooza låt i 30 dagar, ”spela mindre av detta”, exkludera spellista från rekommendationer. Synka regler och visa/återställ dem i inställningar.
 - [ ] **MUS-106 Förklara kön.** Visa källa till föreslagen låt och knappar ”spela liknande härnäst”, ”inte nu”, ”behåll ordning”. Inget tyst kööverskrivande.
 

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LANGUAGES, useI18n, useT, type Lang } from "../i18n";
 import { capabilities, type Channel } from "../lib/api";
 import { cn } from "../lib/format";
+import { usePlayer } from "../player/player";
 import { useSystem } from "../stores/system";
 import { useUi } from "../stores/ui";
 import { BackupSection } from "./BackupSection";
@@ -48,6 +49,26 @@ function Segmented<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+function ShuffleSettings() {
+  const mode = usePlayer((s) => s.shuffleMode);
+  const setMode = usePlayer((s) => s.setShuffleMode);
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-xs font-medium text-fg-3">Slumpvis uppspelning</h3>
+      <Segmented
+        label="Shuffle-läge"
+        value={mode}
+        onChange={setMode}
+        options={[["smart", "Smart Shuffle"], ["classic", "Klassisk"]]}
+      />
+      <p className="text-xs text-fg-2">
+        Smart Shuffle sprider ut artister och prioriterar låtar du inte spelat nyligen.
+        Klassisk använder vanlig slump. Båda använder samma shuffle-knapp i spelaren.
+      </p>
+    </section>
   );
 }
 
@@ -155,6 +176,8 @@ export function SettingsDialog() {
         </section>
 
         <LayoutSection />
+
+        <ShuffleSettings />
 
         <BackupSection />
 
