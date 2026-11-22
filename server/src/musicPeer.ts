@@ -110,6 +110,23 @@ export async function startMusicPeerServer(): Promise<() => Promise<void>> {
       }
       if (!authorized(url.searchParams.get("token"))) return send(401, { error: "unauthorized" });
       if (url.pathname === "/v1/health") return send(200, { ok: true });
+      if (url.pathname === "/v1/catalog" && req.method === "GET") {
+        const saved = await library.getLibrary();
+        const unique = new Map([...saved.favorites, ...saved.history,
+          ...saved.playlists.flatMap((p) => p.tracks)].map((t) => [t.id, t]));
+        const tracks: Array<{ id: string; title: string; artist: string; duration: number; hasLyrics: boolean }> = [];
+        for (const t of unique.values()) {
+          const file = await localAudio(t);
+          if (!file) continue;
+          // No file paths, directories, library favorites, history, account data,
+          // or metadata outside locally matched songs are exposed.
+          tracks.push({
+            id: t.id, title: t.title, artist: t.artist, duration: t.duration,
+            hasLyrics: !!(await localLyrics(t)),
+          });
+        }
+        return send(200, { version: 1, total: tracks.length, tracks });
+      }
       if (req.method !== "GET" && req.method !== "HEAD") return send(405, { error: "method" });
       const lyricMatch = /^\/v1\/lyrics\/([\w-]{11})$/.exec(url.pathname);
       if (lyricMatch && VIDEO_ID.test(lyricMatch[1])) {
