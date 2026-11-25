@@ -1,6 +1,9 @@
 name: Fork preview
 on:
   workflow_dispatch:
+  push:
+    branches: [feat/spotify-import-and-sync]
+    paths: ['.github/workflows/fork-preview.yml']
 permissions:
   contents: read
 jobs:
