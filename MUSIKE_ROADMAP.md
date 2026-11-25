@@ -1,4 +1,4 @@
-﻿# Musike – prioriterad arbetslista
+# Musike – prioriterad arbetslista
 Uppdaterad: 2026-11-22. Status ska alltid baseras på verifiering, inte avsikt.
 
 ## P0 – färdigställ befintligt innan ny funktionalitet
@@ -7,6 +7,12 @@ Uppdaterad: 2026-11-22. Status ska alltid baseras på verifiering, inte avsikt.
 - [ ] **REL-03 Artister och bevakningar synkas.** Status: endast lokal Android-lagring. Gemensam bevakningslista PC/mobil, dubblettskydd, möjlighet att välja artister.
 - [ ] **PLAY-01 Lokala ljudkällor först.** Status: server lokalt verifierad, mobilanslutning inte verifierad. Spela lokal fil på mobilen > PC-strömning > YouTube fallback. Visa faktisk källa och begriplig orsak till fallback. Verifiera med nedladdade låtar på PC och Android.
 - [ ] **QA-01 Versionskedjan.** Status: Android APK 10506 byggd, men release-fixen ovan ännu inte byggd. Typecheck, web build, Android build, install/update, källa och UI-smoketest; sedan Windows EXE. Spara commit och release med testbevis.
+
+## P0 – Distribution och uppdateringar
+- [ ] **DIST-01 Forkens huvudbranch.** Senaste verifierade kod ska vara enkel att hitta; publicera utvecklingsbranch separat och flytta standardbranch först efter QA.
+- [ ] **DIST-02 Release-CI.** Anpassa befintlig release.yml för forkens Windows EXE och Android APK, verifiera byggjobb, paket-ID, signatur och stigande versionCode. Inga osignerade APK som installationsrekommendation.
+- [ ] **DIST-03 Samlad release.** En versionstagg, automatiska release notes, checksummor och tydliga Windows/Android-filer. Testversion som prerelease; stabil först efter installationstest.
+- [ ] **DIST-04 Uppdateringar i appen.** Kontrollera forkens release-API, skilj stabil/testkanal, visa version och ändringar, verifiera signatur/uppgraderingsväg. Ingen tyst installation.
 
 ## P1 – personlig Musike
 - [ ] **STAT-01 Riktig lyssningslogg.** Spela upp/pause/seek/avslut, undvik dubbelräkning och för korta lyssningar; lokal först, synka med PC. Verifiera på kända lyssningssessioner.
