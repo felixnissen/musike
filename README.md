@@ -18,7 +18,9 @@ Runs as a **Windows**, **macOS** and **Linux** app, as an **Android**, **Android
 
 <img src="docs/screenshots/home.jpg" alt="Musike playing Radiohead, with playlists, recently played and the Now Playing panel" width="900" />
 
-**[Download for Windows, macOS, Linux, Android and iPhone](https://github.com/Ernani1234/musike/releases/latest)** · [Run with Docker](#option-6-docker) · [Run from source](#option-7-node-server--browser)
+**[Musike Suite – Windows and Android preview](https://github.com/felixnissen/musike/releases/tag/musike-suite-1.5.8-preview)** · [Windows installation and commands](SUITE.md) · [Upstream releases for other platforms](https://github.com/Ernani1234/musike/releases/latest)
+
+Windows x64: clone this fork and run `install.cmd`, then `start.cmd`. Alternatively, run the All-in-One EXE from the suite release. First installation downloads official dependencies automatically; no Docker, WSL, Node or npm is required for the packaged suite.
 
 </div>
 
