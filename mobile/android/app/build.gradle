@@ -16,7 +16,7 @@ android {
     namespace = "app.musike.android"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.musike.android"
+        applicationId (System.getenv("MUSIKE_APPLICATION_ID") ?: "app.musike.android.hybrid")
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
