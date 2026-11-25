@@ -1,0 +1,44 @@
+name: Fork preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter musike-desktop dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-preview
+          path: release/*-Windows.exe
+          if-no-files-found: error
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @musike/mobile build
+      - run: sh gradlew assembleDebug --console=plain
+        working-directory: mobile/android
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-ci-only-not-for-updates
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
