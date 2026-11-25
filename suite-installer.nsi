@@ -2,7 +2,7 @@ Unicode true
 Name "Musike Suite 1.5.8"
 OutFile "release\suite-publish\Musike-All-in-One-Windows.exe"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+SetCompress off
 ShowInstDetails show
 Icon "desktop\build\icon.ico"
 Page instfiles

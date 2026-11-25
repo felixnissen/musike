@@ -34,9 +34,11 @@ try {
   Expand-Archive "$tmp\python.zip" "$Target\Python" -Force
   (Get-Content "$Target\Python\python312._pth") -replace '^#import site','import site' | Set-Content "$Target\Python\python312._pth"
  }
- & $py -m pip --version
- if($LASTEXITCODE -ne 0){Fetch 'https://bootstrap.pypa.io/get-pip.py' "$tmp\get-pip.py";Run $py @("$tmp\get-pip.py",'--no-warn-script-location')}
- Run $py @('-m','pip','install','--disable-pip-version-check','-r',"$Target\MusicGrabber\requirements-windows.txt")
+ & $py -s -m pip --version
+ if($LASTEXITCODE -ne 0){Fetch 'https://bootstrap.pypa.io/get-pip.py' "$tmp\get-pip.py";Run $py @('-s',"$tmp\get-pip.py",'--isolated','--no-warn-script-location')}
+ Run $py @('-s','-m','pip','--isolated','install','--disable-pip-version-check','-r',"$Target\MusicGrabber\requirements-windows.txt")
+ $env:PLAYWRIGHT_BROWSERS_PATH="$Target\Browsers"
+ Run $py @('-s','-m','playwright','install','chromium')
  $bin="$Target\Tools"
  New-Item -ItemType Directory -Force $bin|Out-Null
  if(!(Test-Path "$bin\yt-dlp.exe")){Fetch 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' "$bin\yt-dlp.exe"}
