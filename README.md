@@ -52,6 +52,20 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 - **Any screen:** designed for phones of every size, tablets, laptops and big monitors.
 - **Yours:** it runs on your own computer. Playlists and favorites live in a local file you can export and take to any other Musike.
 
+## Music import (planned unified menu)
+
+One library, multiple sources. This is a design concept; Suno integration and automatic sync are not implemented yet.
+
+<img src="docs/screenshots/import-menu-concept.png" width="360" alt="Unified import menu: YouTube, Suno, Spotify, MusicGrabber and local files" />
+
+- **YouTube:** tracks, playlists and links.
+- **Suno:** your own creations, artwork, lyrics, metadata and optional incremental sync, subject to account permissions.
+- **Spotify:** playlists, favorites and track matching.
+- **MusicGrabber:** search and retrieve available music where permitted.
+- **Local music:** files, folders and watched libraries.
+
+All sources are intended to share the import queue, duplicate detection, metadata and audio analysis. No separate Suno app is planned.
+
 ## Features
 
 **Listen**
