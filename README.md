@@ -55,6 +55,8 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 
 ## Music import (preview)
 
+[Universal import adapter architecture and current capabilities](docs/import-adapters.md).
+
 One library, multiple sources. Open **Library → Import music** on the desktop or mobile app.
 
 <img src="docs/screenshots/import-menu-implemented.png" width="360" alt="Actual Swedish Musike import menu: YouTube, Suno, Spotify, MusicGrabber and local music files" />

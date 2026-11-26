@@ -7,12 +7,15 @@ import { PageHeader } from "../components/Page";
 import { PeerMusicSection } from "../components/PeerMusicSection";
 import { useI18n } from "../i18n";
 import { api, capabilities } from "../lib/api";
-import type { Track } from "../lib/types";
+import { identifyLink, importFiles as executeFiles, previewLink, readSpotifyExport, type Preview } from "../lib/importAdapters";
+import { isFileSource, supports, type ImportSourceId } from "../../../shared/importRegistry";
+
 import { paths } from "../lib/routes";
 
 import { useLibrary } from "../stores/library";
 
-type Source = "youtube" | "suno" | "spotify" | "musicgrabber" | "local";
+type Source = ImportSourceId;
+let spotifyDraft:{terms:string[];page:number;input:string}={terms:[],page:0,input:""};
 const btn = "rounded-full bg-accent px-5 py-3 font-semibold text-accent-ink disabled:opacity-40";
 export default function ImportMusic() {
   const sv = useI18n(s => s.lang === "sv");
@@ -20,14 +23,18 @@ export default function ImportMusic() {
   const navigate = useNavigate();
   const [source, setSource] = useState<Source | null>(()=>new URLSearchParams(window.location.search).get("source")==="suno"?"suno":null);
   const [input, setInput] = useState("");
+  const [smartLink,setSmartLink]=useState("");
+  const [spotifyTerms,setSpotifyTerms]=useState<string[]>([]);
+  const [spotifyPage,setSpotifyPage]=useState(0);
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
-  const [preview,setPreview] = useState<{title:string;tracks:Track[]} | null>(null);
+  const [preview,setPreview] = useState<Preview | null>(null);
   const [progress, setProgress] = useState(0);
   const [watch, setWatch] = useState<ImportWatchStatus | null>(null);
   const [watchBusy,setWatchBusy] = useState(false);
-  const watchSource = source === "suno" || source === "local" || source === "musicgrabber" ? source : null;
+  useEffect(()=>{if(source==="spotify")spotifyDraft={terms:spotifyTerms,page:spotifyPage,input};},[source,spotifyTerms,spotifyPage,input]);
+  const watchSource = isFileSource(source) && supports(source,"folder") ? source : null;
   useEffect(() => {
     setWatch(null);
     if (!watchSource || !desktop?.importWatch) return;
@@ -50,37 +57,21 @@ export default function ImportMusic() {
     { id: "musicgrabber", title: "MusicGrabber", desc: tr("Lokalt bibliotek och parkoppling", "Local library and pairing"), icon: <DownloadSimpleIcon size={30} />, color: "bg-surface-3" },
     { id: "local", title: tr("Egna musikfiler", "Local music files"), desc: tr("Importera ljudfiler", "Import audio files"), icon: <FolderOpenIcon size={30} />, color: "bg-surface-3" },
   ] as const;
-  const select = (s: Source | null) => { setSource(s); setInput(""); setFiles([]); setMessages([]); setProgress(0); setPreview(null); };
+  const select = (s: Source | null) => { setSource(s); setInput(s==="spotify"?spotifyDraft.input:""); setFiles([]); setMessages([]); setProgress(0); setPreview(null);setSpotifyTerms(s==="spotify"?spotifyDraft.terms:[]);setSpotifyPage(s==="spotify"?spotifyDraft.page:0); };
   async function loadSpotifyExport(file:File) {
     setMessages([]);
     try {
-      if(file.size>5*1024*1024)throw new Error("Export file exceeds 5 MB");
-      const text=await file.text();
-      let terms:string[];
-      if(/\.json$/i.test(file.name)) {
-        const data=JSON.parse(text);const rows=Array.isArray(data)?data:Array.isArray(data.tracks)?data.tracks:Array.isArray(data.items)?data.items:[];
-        terms=rows.map((entry:any)=>{const t=entry.track||entry;const title=t.trackName||t.song||t.name||t.master_metadata_track_name;const artist=t.artistName||t.artist||t.master_metadata_album_artist_name||t.artists?.map((a:any)=>a.name).join(" ");return typeof title==="string"&&typeof artist==="string"?title+" "+artist:"";}).filter(Boolean);
-      } else terms=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-      terms=[...new Set(terms)].map(t=>t.replace(/,/g," "));
+      const terms=await readSpotifyExport(file);
       if(!terms.length)throw new Error("No track and artist entries found.");
-      setInput(terms.slice(0,50).join("\n"));setMessages([tr("Låtar i exporten","Tracks in export")+": "+terms.length+(terms.length>50?" · "+tr("Första 50 i denna omgång.","First 50 in this batch."):"")]);
+      setSpotifyTerms(terms);setSpotifyPage(0);setInput(terms.slice(0,50).join("\n"));setMessages([tr("Låtar i exporten","Tracks in export")+": "+terms.length]);
     }catch(e){setMessages([(e as Error).message]);}
   }
   async function youtubePreview() {
     setBusy(true);setPreview(null);setMessages([]);
     try {
-      const u=new URL(input.trim());
-      if(!/(^|\.)youtube\.com$|^youtu\.be$/.test(u.hostname)||!/^https?:$/.test(u.protocol)) throw new Error("Not a YouTube URL");
-      const list=u.searchParams.get("list");
-      if(list && capabilities.video) {
-        const res=await fetch("/api/import/youtube/playlist?id="+encodeURIComponent(list));const data=await res.json();
-        if(!res.ok)throw new Error(data.error||res.statusText);
-        setPreview(data);return;
-      }
-      const id=u.hostname==="youtu.be"?u.pathname.slice(1):u.searchParams.get("v")||u.pathname.split("/shorts/")[1];
-      if(!id||!/^[-_A-Za-z0-9]{11}$/.test(id))throw new Error("A valid track link is required (playlist preview is desktop only).");
-      const r=await api.prepare(id);
-      setPreview({title:"YouTube imports",tracks:[{id:r.id,title:r.title,artist:"YouTube",duration:r.duration,thumb:"https://i.ytimg.com/vi/"+r.id+"/mqdefault.jpg",art:"https://i.ytimg.com/vi/"+r.id+"/hq720.jpg",kind:"video"}]});
+      const target=identifyLink(input);
+      if(!target||target.source!=="youtube")throw Error("Not a supported YouTube link");
+      setPreview(await previewLink(target));
     } catch(e){setMessages([(e as Error).message]);}finally{setBusy(false);}
   }
   async function savePreview() {
@@ -94,29 +85,22 @@ export default function ImportMusic() {
     }catch(e){setMessages([(e as Error).message]);}finally{setBusy(false);}
   }
   async function importFiles() {
-    if (source !== "suno" && source !== "local" && source !== "musicgrabber") return;
-    setBusy(true); setMessages([]); setProgress(0);
-    let added = 0, duplicates = 0;
-    const errors: string[] = [];
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        try {
-          if (f.size > 128 * 1024 * 1024) throw new Error("128 MB max");
-          const response = await fetch("/api/import/audio?" + new URLSearchParams({ name: f.name, source }), {
-            method: "POST", headers: { "content-type": "application/octet-stream", "x-musike-import": "1" }, body: f,
-          });
-          const body = await response.json();
-          if (!response.ok) throw new Error(body.error || response.statusText);
-          if (/\.zip$/i.test(f.name)) { added+=body.added; duplicates+=body.duplicates; errors.push(...body.errors); }
-          else if (body.duplicate) duplicates++; else added++;
-        } catch (e) { errors.push(f.name + ": " + (e as Error).message); }
-        setProgress(i + 1);
-      }
+    if(!isFileSource(source))return;
+    setBusy(true);setMessages([]);setProgress(0);
+    try{
+      const r=await executeFiles(source,files,setProgress);
       await useLibrary.getState().load();
-      setMessages([tr("Nya", "New") + ": " + added + " · " + tr("Redan importerade", "Already imported") + ": " + duplicates + " · " + tr("Fel", "Failed") + ": " + errors.length, ...errors]);
-    } catch (e) { setMessages([...errors, (e as Error).message]); }
-    finally { setBusy(false); }
+      setMessages([tr("Nya","New")+": "+r.added+" · "+tr("Redan importerade","Already imported")+": "+r.duplicates+" · "+tr("Fel","Failed")+": "+r.errors.length,...r.errors]);
+    }catch(e){setMessages([(e as Error).message]);}finally{setBusy(false);}
+  }
+  async function routeSmartLink(){
+    const target=identifyLink(smartLink);
+    if(!target){setMessages([tr("Länken stöds inte","Unsupported link")]);return;}
+    select(target.source);
+    setInput(target.url);
+    if(target.source==="youtube"){
+      setBusy(true);try{setPreview(await previewLink(target));}catch(e){setMessages([(e as Error).message]);}finally{setBusy(false);}
+    }else if(target.source==="spotify") {setInput(spotifyDraft.input);setMessages([tr("Spotify-länk identifierad. Använd exportfil eller låtlista för import.","Spotify link detected. Import via an export file or track list.")]);}else if(target.source==="suno"){setMessages([tr("Suno-länk identifierad. Anslut kontot och välj låten i biblioteket.","Suno link detected. Connect your account and select the song from your library.")]);}
   }
   return <div className="pb-8">
     <PageHeader title={tr("Importera musik", "Import music")} actions={<Link to={paths.library} aria-label={tr("Bibliotek", "Library")}><ArrowLeftIcon size={22} /></Link>} />
@@ -124,6 +108,8 @@ export default function ImportMusic() {
       <div className="rounded-[24px] bg-surface-2 p-4 ring-1 ring-line md:p-6">
         {!source ? <>
           <p className="mb-3 text-fg-2">{tr("Välj varifrån du vill lägga till musik.", "Choose where to add music from.")}</p>
+          <form onSubmit={e=>{e.preventDefault();void routeSmartLink();}} className="mb-3 flex flex-wrap gap-2"><input aria-label={tr("Musiklänk","Music link")} value={smartLink} onChange={e=>setSmartLink(e.target.value)} placeholder={tr("Klistra in en musiklänk","Paste a music link")} className="min-w-0 flex-1 rounded-xl bg-bg p-3"/><button className={btn} disabled={!smartLink.trim()||busy}>{tr("Identifiera","Detect")}</button></form>
+          {messages.map((m,i)=><p key={i} role="status" className="text-sm">{m}</p>)}
           {rows.map((r, i) => <button key={r.id} type="button" onClick={() => select(r.id)}
             className={"flex w-full items-center gap-4 py-5 text-left hover:bg-surface-3 " + (i ? "border-t border-line" : "")}>
             <span className={"grid size-14 shrink-0 place-items-center rounded-2xl " + r.color}>{r.icon}</span>
@@ -144,10 +130,11 @@ export default function ImportMusic() {
           {source === "spotify" && <>
             <p className="text-sm text-fg-2">{tr("Klistra in exporterade låtnamn och artister (en per rad, upp till 50). Granska matchningarna innan du sparar. Du kan också välja en Spotify JSON-export. Kontosynkning och direkta Spotify-länkar är inte anslutna här ännu.", "Paste exported track names and artists (one per line, up to 50). Review matches before saving. You can also select a Spotify JSON export. Account sync and Spotify URL import are not connected here yet.")}</p>
             <label className="text-sm">{tr("Välj exportfil (JSON/TXT)","Choose export file (JSON/TXT)")}<input type="file" accept=".json,.txt" className="mt-2 block w-full" onChange={e=>{const f=e.target.files?.[0];if(f)void loadSpotifyExport(f);}} /></label>
+            {spotifyTerms.length>50&&<div className="flex items-center justify-between gap-2"><button disabled={spotifyPage===0} onClick={()=>{const p=spotifyPage-1;setSpotifyPage(p);setInput(spotifyTerms.slice(p*50,p*50+50).join("\n"));}}>←</button><span>{spotifyPage+1} / {Math.ceil(spotifyTerms.length/50)}</span><button disabled={(spotifyPage+1)*50>=spotifyTerms.length} onClick={()=>{const p=spotifyPage+1;setSpotifyPage(p);setInput(spotifyTerms.slice(p*50,p*50+50).join("\n"));}}>→</button></div>}
             <textarea aria-label="Track list" rows={6} className="rounded-xl bg-bg p-3" value={input} onChange={e => setInput(e.target.value)} />
             <button type="button" className={btn} disabled={!input.trim()} onClick={() => navigate(paths.searchList, { state: { text: input } })}>{tr("Matcha och granska", "Match and review")}</button>
           </>}
-          {(source === "youtube" || source === "spotify") && <div role="status" className="text-sm text-fg-2">{messages.map((m,i)=><p key={i}>{m}</p>)}</div>}
+          {(source === "youtube" || source === "spotify" || (source === "suno" && !capabilities.video)) && <div role="status" className="text-sm text-fg-2">{messages.map((m,i)=><p key={i}>{m}</p>)}</div>}
           {source === "musicgrabber" && <><PeerMusicSection />{capabilities.video && <a href="http://127.0.0.1:38274" target="_blank" rel="noreferrer" className="text-accent-text underline">{tr("Öppna MusicGrabber (Musike Suite)", "Open MusicGrabber (Musike Suite)")}</a>}</> }
           {source === "suno" && <>
             <SunoConnect />

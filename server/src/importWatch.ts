@@ -1,9 +1,9 @@
 import { lstat, realpath, readFile, readdir, mkdir, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { config } from "./config.js";
-import { IMPORT_LIMIT, importAudioToLibrary, type ImportSource } from "./importAudio.js";
+import { IMPORT_LIMIT, type ImportSource } from "./importAudio.js";
 
-import { importZip } from "./importZip.js";
+import { importFile } from "./importEngine.js";
 const extensions = new Set([".mp3",".wav",".flac",".ogg",".opus",".m4a",".zip"]);
 interface Watch { folder: string; seen: Record<string,string>; lastScan?: number; added?: number; errors?: number; pending?: number; lastError?: string }
 type State = Partial<Record<ImportSource,Watch>>;
@@ -72,13 +72,8 @@ async function scan(source:ImportSource,w:Watch) {
         const data=await readFile(actual);
         const after=await lstat(full);
         if(after.size!==st.size||after.mtimeMs!==st.mtimeMs){w.pending!++;continue;}
-        if(path.extname(entry.name).toLowerCase()===".zip") {
-          const result=await importZip(data,source);w.added!+=result.added;w.errors!+=result.errors.length;
-          if(result.errors.length){w.lastError=result.errors[0];continue;}
-        }else{
-          const result=await importAudioToLibrary(data,entry.name,source);
-          if(!result.duplicate)w.added!++;
-        }
+        const result=await importFile(data,entry.name,source);w.added!+=result.added;w.errors!+=result.errors.length;
+        if(result.errors.length){w.lastError=result.errors[0];continue;}
         w.seen[relative]=signature;
       }catch(e){w.errors!++;w.lastError=(e as Error).message.slice(0,200);}
     }

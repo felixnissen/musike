@@ -26,6 +26,28 @@ try {
     await page.getByRole("heading",{name,exact:true}).waitFor();
     await page.getByRole("button",{name:"Alla källor"}).click();
   }
+  await page.getByRole("textbox",{name:"Musiklänk"}).fill("https://suno.com/song/test");
+  await page.getByRole("button",{name:"Identifiera"}).click();
+  await page.getByRole("heading",{name:"Suno",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Alla källor"}).click();
+  await page.getByRole("textbox",{name:"Musiklänk"}).fill("https://open.spotify.com/playlist/0123456789ABCDEFGHIJKL");
+  await page.getByRole("button",{name:"Identifiera"}).click();
+  await page.getByRole("heading",{name:"Spotify",exact:true}).waitFor();
+  await page.locator('input[type="file"]').setInputFiles({name:"playlist.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify({tracks:Array.from({length:123},(_,i)=>({trackName:"Track "+i,artistName:"Artist"}))}))});
+  await page.getByText("1 / 3",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"→",exact:true}).click();
+  await page.getByText("2 / 3",{exact:true}).waitFor();
+  assert.match(await page.getByRole("textbox",{name:"Track list"}).inputValue(),/^Track 50 Artist/);
+  await page.getByRole("button",{name:"Alla källor"}).click();
+  await page.getByRole("button",{name:/^Spotify/}).click();
+  await page.getByText("2 / 3",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Alla källor"}).click();
+  await page.route("**/api/import/youtube/playlist?*",r=>r.fulfill({json:{title:"Mock playlist",tracks:[{id:"dQw4w9WgXcQ",title:"Test track",artist:"Artist",duration:20,thumb:"",art:"",kind:"video"}]}}));
+  await page.getByRole("textbox",{name:"Musiklänk"}).fill("https://www.youtube.com/playlist?list=PLabcdefghij");
+  await page.getByRole("button",{name:"Identifiera"}).click();
+  await page.getByText("Mock playlist · 1",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Alla källor"}).click();
+  console.log("ADAPTER_UI_OK: automatic routing, Spotify 123-track pagination, retained draft, YouTube preview (mocked service)");
   if(process.env.MUSIKE_IMPORT_SCREENSHOT)await page.screenshot({path:process.env.MUSIKE_IMPORT_SCREENSHOT});
   await page.getByRole("button",{name:/^Suno/}).click();
   const b=Buffer.alloc(16044);b.write("RIFF",0);b.writeUInt32LE(b.length-8,4);b.write("WAVEfmt ",8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(8000,24);b.writeUInt32LE(16000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write("data",36);b.writeUInt32LE(16000,40);

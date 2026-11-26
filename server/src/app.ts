@@ -14,8 +14,9 @@ import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
 import { readSunoMetadata } from "./importMetadata.js";
-import { importZip } from "./importZip.js";
-import { IMPORT_LIMIT, importAudioToLibrary, importedAudio } from "./importAudio.js";
+import { importFile } from "./importEngine.js";
+import { isFileSource } from "../../shared/importRegistry.js";
+import { IMPORT_LIMIT, importedAudio } from "./importAudio.js";
 import { HttpError, VIDEO_ID, TRACK_ID } from "./types.js";
 import { downloadHd, pruneCache, resolveFastAudio, resolveStreams, ytdlpPlaylist } from "./ytdlp.js";
 
@@ -80,9 +81,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress || "") || req.headers["x-musike-import"] !== "1" || !["127.0.0.1", "localhost", "[::1]"].includes(req.hostname.split(/:\\d+$/)[0])) return reply.code(403).send({ error: "Local import only" });
   } }, async (req, reply) => {
     const { name, source } = req.query as { name?: string; source?: string };
-    if (!Buffer.isBuffer(req.body) || !name || !["suno", "local", "musicgrabber"].includes(source || "")) return reply.code(400).send({ error: "Invalid import" });
-    if (/\.zip$/i.test(name)) return importZip(req.body, source as "suno" | "local" | "musicgrabber");
-    return importAudioToLibrary(req.body, name, source as "suno" | "local" | "musicgrabber");
+    if (!Buffer.isBuffer(req.body) || !name || !isFileSource(source)) return reply.code(400).send({ error: "Invalid import" });
+    return importFile(req.body, name, source);
   });
 
   app.get("/api/import/youtube/playlist", async (req) => {

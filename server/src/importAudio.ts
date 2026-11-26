@@ -45,7 +45,7 @@ export async function storeImportedAudio(bytes: Buffer, name: string, source: "s
   await mkdir(root(), { recursive: true });
   const file = path.join(root(), id + "." + format);
   const temp = path.join(root(), randomUUID() + ".partial");
-  try {
+  if(!(await importedAudio(id)))try {
     await writeFile(temp, bytes, { flag: "wx" });
     try { await rename(temp, file); }
     catch (e) { if (!(await importedAudio(id))) throw e; }
@@ -64,17 +64,18 @@ export async function importedAudio(id: string): Promise<{ file: string; mime: s
   return null;
 }
 
-export type ImportSource = "suno" | "local" | "musicgrabber";
+export type ImportSource = import("../../shared/importRegistry.js").FileSource;
 const playlistName = { suno: "Suno", local: "Local imports", musicgrabber: "MusicGrabber" } as const;
 let queue: Promise<unknown> = Promise.resolve();
 /** Commit each file immediately; interrupted batches can be retried without duplicate playlist entries. */
 export function importAudioToLibrary(bytes: Buffer, name: string, source: ImportSource) {
   const task = queue.then(async () => {
-    const track = await storeImportedAudio(bytes, name, source);
+    const id = "local-" + createHash("sha256").update(bytes).digest("hex");
     const saved = await library.getLibrary();
     const p = saved.playlists.find(p => p.name === playlistName[source]);
-    const old = p?.tracks.find(t => t.id === track.id);
-    if (old) return { track: old, playlistId: p!.id, duplicate: true };
+    const old = p?.tracks.find(t => t.id === id);
+    if (old && await importedAudio(id)) return { track: old, playlistId: p!.id, duplicate: true };
+    const track = await storeImportedAudio(bytes, name, source);
     const playlist = p ? await library.addToPlaylist(p.id, track) : await library.createPlaylist(playlistName[source], [track]);
     return { track, playlistId: playlist.id, duplicate: false };
   });
