@@ -18,7 +18,7 @@ export default function ImportMusic() {
   const sv = useI18n(s => s.lang === "sv");
   const tr = (a: string, b: string) => sv ? a : b;
   const navigate = useNavigate();
-  const [source, setSource] = useState<Source | null>(null);
+  const [source, setSource] = useState<Source | null>(()=>new URLSearchParams(window.location.search).get("source")==="suno"?"suno":null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);

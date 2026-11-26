@@ -22,7 +22,7 @@ export function artistsFromLibrary(lib: Pick<Library, "favorites" | "playlists" 
     .sort((a, b) => b[1] - a[1]).map(([name]) => name);
 }
 
-function cached(): { at: number; artists: string; releases: NewRelease[]; checked: number; attempted: number; total: number; nextIndex: number } | null {
+export function cached(): { at: number; artists: string; releases: NewRelease[]; checked: number; attempted: number; total: number; nextIndex: number } | null {
   try {
     const data = JSON.parse(localStorage.getItem(CACHE) ?? "null");
     return data && typeof data.at === "number" && Array.isArray(data.releases) ? data : null;
@@ -59,7 +59,7 @@ async function mb<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function discoverNewReleases(
+async function scanReleases(
   artists: string[], force = false,
 ): Promise<{ releases: NewRelease[]; updatedAt: number; checked: number; attempted: number; total: number; nextIndex: number }> {
   const names = [...new Set(artists.map((s) => s.trim()).filter(Boolean))];
@@ -87,7 +87,7 @@ export async function discoverNewReleases(
         "artist/?query=" + encodeURIComponent('artist:"' + artist.replace(/"/g, "") + '"') + "&fmt=json&limit=3",
       );
       const match = found.artists?.find((a) => a.name.toLocaleLowerCase() === artist.toLocaleLowerCase());
-      if (!match) { results.push(...await itunesReleases(artist)); checked++; continue; }
+      if (!match) { const fallback=await itunesReleases(artist); results.push(...fallback); checked++; continue; }
       checked++;
       const groups = await request<{ "release-groups"?: { id: string; title: string; "first-release-date"?: string; "primary-type"?: string }[] }>(
         "release-group?artist=" + encodeURIComponent(match.id) + "&type=album|single|ep&limit=100&fmt=json",
@@ -127,4 +127,18 @@ export async function discoverNewReleases(
   const totalAttempted = attempted;
   localStorage.setItem(CACHE, JSON.stringify({ at: updatedAt, artists: signature, releases, checked, attempted: totalAttempted, total: names.length, nextIndex }));
   return { releases, updatedAt, checked, attempted: totalAttempted, total: names.length, nextIndex };
+}
+
+let active:Promise<Awaited<ReturnType<typeof scanReleases>>>|undefined;
+export function discoverNewReleases(artists:string[],force=false){
+ if(active)return active;
+ active=scanReleases(artists,force).finally(()=>{active=undefined;});
+ return active;
+}
+export async function preloadReleases(artists:string[]){
+ if(!artists.length)return;
+ for(let i=0;i<Math.ceil(artists.length/25)+1;i++){
+ const r=await discoverNewReleases(artists);
+ if(!r.nextIndex)break;
+ }
 }

@@ -1,5 +1,7 @@
 import {
   BooksIcon,
+  DownloadSimpleIcon,
+  MusicNotesIcon,
   ClockCounterClockwiseIcon,
   GearSixIcon,
   HeartIcon,
@@ -9,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router";
-import { useT } from "../i18n";
+import { useI18n, useT } from "../i18n";
 import { cn } from "../lib/format";
 import { paths } from "../lib/routes";
 import { useAppearance } from "../stores/appearance";
@@ -93,6 +95,7 @@ function RailLink({ to, label, sub, end, children }: { to: string; label: string
 }
 
 export function Rail() {
+  const sv=useI18n(s=>s.lang==="sv");
   const t = useT();
   const sidebarPlaylists = useAppearance((s) => s.sidebarPlaylists);
   const playlists = useLibrary((s) => s.playlists);
@@ -133,6 +136,8 @@ export function Rail() {
               )}
             </NavLink>
           ))}
+        <RailLink to={paths.importMusic} label={sv?"Importera musik":"Import music"}><DownloadSimpleIcon size={24}/></RailLink>
+          <RailLink to={paths.newReleases} label={sv?"Ny musik":"New releases"}><MusicNotesIcon size={24}/></RailLink>
         </nav>
 
         <div className="mx-4 my-3 h-px bg-line [@media(max-height:540px)]:my-1.5" />

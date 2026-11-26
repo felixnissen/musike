@@ -33,6 +33,7 @@ import ImportMusic from "./views/ImportMusic";
 import NewReleases from "./views/NewReleases";
 import Search from "./views/Search";
 
+import { artistsFromLibrary, preloadReleases } from "./lib/newReleases";
 const SHEET_HASH = `#${NOW_PLAYING_HASH}`;
 
 export default function App() {
@@ -48,6 +49,17 @@ export default function App() {
   const main = useRef<HTMLElement>(null);
 
   useShortcuts();
+  useEffect(()=>{
+    let busy=false;
+    const run=async()=>{if(busy)return;busy=true;try{
+      const raw=JSON.parse(localStorage.getItem("musike:release-watch-artists:v1")||"[]");
+      const followed=Array.isArray(raw)?raw.filter((x:unknown)=>typeof x==="string"):[];
+      await preloadReleases([...new Set<string>([...followed,...artistsFromLibrary(useLibrary.getState())])]);
+    }catch{}finally{busy=false;}};
+    const initial=setTimeout(run,8000),timer=setInterval(run,15*60_000);
+    window.addEventListener("online",run);
+    return()=>{clearTimeout(initial);clearInterval(timer);window.removeEventListener("online",run);};
+  },[]);
 
   useEffect(() => {
     void loadLibrary();

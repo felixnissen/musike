@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { artistsFromLibrary, discoverNewReleases, type NewRelease } from "../lib/newReleases";
+import { artistsFromLibrary, cached, discoverNewReleases, type NewRelease } from "../lib/newReleases";
 import { paths } from "../lib/routes";
 import { useLibrary } from "../stores/library";
 
@@ -18,8 +18,8 @@ export default function NewReleases() {
   const history = useLibrary((s) => s.history);
   const [followed, setFollowed] = useState(readFollowed);
   const [input, setInput] = useState("");
-  const [releases, setReleases] = useState<NewRelease[]>([]);
-  const [updated, setUpdated] = useState<number | null>(null);
+  const [releases, setReleases] = useState<NewRelease[]>(()=>cached()?.releases||[]);
+  const [updated, setUpdated] = useState<number | null>(()=>cached()?.at||null);
   const [coverage, setCoverage] = useState({ checked: 0, attempted: 0, total: 0, nextIndex: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -51,7 +51,7 @@ export default function NewReleases() {
   return <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-8">
     <div className="flex items-center justify-between gap-3">
       <div><h1 className="text-2xl font-bold">Ny musik</h1>
-        <p className="text-sm text-fg-2">Nya släpp från dina artister · uppdateras högst en gång per dygn när appen används</p></div>
+        <p className="text-sm text-fg-2">Nya släpp från dina artister · förhämtas dagligen i bakgrunden när appen körs</p></div>
       <Link to={paths.library} className="text-sm text-accent">Bibliotek</Link>
     </div>
     <form onSubmit={(e) => { e.preventDefault(); add(); }} className="flex gap-2">
@@ -84,6 +84,6 @@ export default function NewReleases() {
         <span className="text-sm text-fg-2">{release.artist} · {release.type} · {release.date}</span>
       </a>
     </li>)}</ul>
-    <p className="text-xs text-fg-3">Källa: MusicBrainz. Släppdatum kan vara ofullständiga. Musik spelas inte upp eller laddas ned automatiskt.</p>
+    <p className="text-xs text-fg-3">Källa: MusicBrainz och Apple Music. Släppdatum kan vara ofullständiga. Musik spelas inte upp eller laddas ned automatiskt.</p>
   </div>;
 }

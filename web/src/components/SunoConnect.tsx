@@ -10,7 +10,7 @@ export function SunoConnect(){
   const [songs,setSongs]=useState<{id:string;title:string;imported?:boolean}[]>([]),[cursor,setCursor]=useState<string|null>(null);
   const [auto,setAuto]=useState(false),[lastAuto,setLastAuto]=useState<SunoResult["lastAuto"]>();
   useEffect(()=>{let live=true;const refresh=()=>void desktop?.suno?.("status").then(r=>{if(live){setConnected(!!r.connected);setAuto(!!r.auto);setLastAuto(r.lastAuto);}}).catch(()=>{});refresh();const timer=setInterval(refresh,10000);return()=>{live=false;clearInterval(timer);};},[]);
-  if(!desktop?.suno)return null;
+  if(!desktop?.suno)return <p role="alert">{tr("Suno-kontokoppling kräver den nya Windows-appen.","Suno account connection requires the updated desktop app.")}</p>;
   const run=async(action:"connect"|"disconnect"|"library"|"download"|"auto-on"|"auto-off"|"auto-now",value?:string)=>{
     setBusy(true);setMessage("");
     try{

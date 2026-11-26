@@ -185,7 +185,7 @@ async function launch() {
   }
 
   clearInterval(report);
-  mainWindow = createMainWindow(`http://127.0.0.1:${server.port}`);
+  mainWindow = createMainWindow(`http://127.0.0.1:${server.port}${process.argv.includes("--show-suno") ? "/library/import?source=suno" : ""}`);
   mainWindow.once("ready-to-show", () => splash.destroy());
   sunoTimer??=setInterval(()=>void autoSuno(),5*60_000);
 }
