@@ -80,6 +80,8 @@ Suno now has an experimental official account connection in the desktop app. Spo
 
 ### Suno account connection (experimental desktop preview)
 
+<img src="docs/screenshots/suno-connect-preview.png" width="360" alt="Suno account connection in the desktop UI, tested with a simulated bridge" />
+
 In the Suno import panel, choose **Connect Suno**, sign in through Suno's own OAuth page, and load your own library. The connector uses the [official Suno MCP server](https://help.suno.com/en/articles/14551425), not browser cookies or private endpoints. Authentication uses PKCE and OS-protected local token storage when available.
 
 Import a selected song directly, subject to the account's download allocation. If Suno requires a download credit, Musike shows a native confirmation dialog first. Already-imported Suno IDs and identical audio bytes are deduplicated.
