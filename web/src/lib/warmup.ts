@@ -10,7 +10,7 @@ const WINDOW_MS = 120_000;
 const MAX_RECENT = 80;
 
 export function warmupTrack(track: Track): void {
-  if (busy) return;
+  if (busy || /^local-[a-f0-9]{64}$/.test(track.id)) return;
   const now = Date.now();
   if (now - (recently.get(track.id) ?? 0) < WINDOW_MS) return;
   recently.set(track.id, now);

@@ -1,10 +1,10 @@
-import { DatabaseIcon, PlusIcon } from "@phosphor-icons/react";
+import { DatabaseIcon, DownloadSimpleIcon, PlusIcon } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Cover, type CoverKind } from "../components/Cover";
 import { NamePlaylistDialog } from "../components/Dialogs";
 import { PageHeader } from "../components/Page";
-import { useT } from "../i18n";
+import { useI18n, useT } from "../i18n";
 import { paths } from "../lib/routes";
 import type { Track } from "../lib/types";
 import { IconButton } from "../components/IconButton";
@@ -39,6 +39,7 @@ export default function Library() {
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
   const navigate = useNavigate();
   const t = useT();
+  const sv = useI18n(s => s.lang === "sv");
 
   return (
     <div className="pb-8">
@@ -61,6 +62,7 @@ export default function Library() {
         }
       />
 
+      <Link to={paths.importMusic} className="mx-4 my-3 flex items-center gap-3 rounded-[16px] bg-surface-2 p-4 font-semibold ring-1 ring-line hover:bg-surface-3"><DownloadSimpleIcon size={24} /> {sv ? "Importera musik" : "Import music"}</Link>
       <ul className="grid grid-cols-1 gap-1 px-2 pt-2 md:grid-cols-3 md:gap-2 md:px-4 lg:grid-cols-4 2xl:grid-cols-6">
         <Entry to={paths.favorites} name={t.nav.favorites} kind="favorites" tracks={favorites} sub={t.common.tracks(favorites.length)} />
         <Entry to={paths.history} name={t.nav.recentlyPlayed} kind="history" tracks={history} sub={t.common.tracks(history.length)} />

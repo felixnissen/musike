@@ -13,12 +13,20 @@ import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
-import { HttpError, VIDEO_ID } from "./types.js";
-import { downloadHd, pruneCache, resolveFastAudio, resolveStreams } from "./ytdlp.js";
+import { importZip } from "./importZip.js";
+import { IMPORT_LIMIT, importAudioToLibrary, importedAudio } from "./importAudio.js";
+import { HttpError, VIDEO_ID, TRACK_ID } from "./types.js";
+import { downloadHd, pruneCache, resolveFastAudio, resolveStreams, ytdlpPlaylist } from "./ytdlp.js";
 
 function videoId(params: unknown): string {
   const id = (params as { id?: string }).id ?? "";
   if (!VIDEO_ID.test(id)) throw new HttpError(400, msg("invalidVideoId"));
+  return id;
+}
+
+function trackId(params: unknown): string {
+  const id = (params as { id?: string }).id ?? "";
+  if (!TRACK_ID.test(id)) throw new HttpError(400, msg("invalidVideoId"));
   return id;
 }
 
@@ -66,6 +74,21 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.get("/api/health", async () => ({ ok: true }));
+  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: IMPORT_LIMIT }, (_req, body, done) => done(null, body));
+  app.post("/api/import/audio", { bodyLimit: IMPORT_LIMIT, onRequest: async (req, reply) => {
+    if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress || "") || req.headers["x-musike-import"] !== "1" || !["127.0.0.1", "localhost", "[::1]"].includes(req.hostname.split(/:\\d+$/)[0])) return reply.code(403).send({ error: "Local import only" });
+  } }, async (req, reply) => {
+    const { name, source } = req.query as { name?: string; source?: string };
+    if (!Buffer.isBuffer(req.body) || !name || !["suno", "local", "musicgrabber"].includes(source || "")) return reply.code(400).send({ error: "Invalid import" });
+    if (/\.zip$/i.test(name)) return importZip(req.body, source as "suno" | "local" | "musicgrabber");
+    return importAudioToLibrary(req.body, name, source as "suno" | "local" | "musicgrabber");
+  });
+
+  app.get("/api/import/youtube/playlist", async (req) => {
+    const id = (req.query as { id?: string }).id || "";
+    const result = await ytdlpPlaylist(id);
+    return { title: result.title, tracks: result.entries.filter(e=>e && VIDEO_ID.test(e.id) && e.title).map(e=>({id:e.id,title:e.title,artist:e.channel || e.uploader || "",duration:e.duration || 0,thumb:"https://i.ytimg.com/vi/"+e.id+"/mqdefault.jpg",art:"https://i.ytimg.com/vi/"+e.id+"/hq720.jpg",kind:"video"})) };
+  });
 
   // System: yt-dlp status and one-click update
 
@@ -140,7 +163,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   /** Resolves stream URLs ahead of time so the next track starts instantly. */
   // Prepare an audio URL without downloading music or resolving video formats.
   app.post("/api/prepare-audio/:id", async (req) => {
-    const id = videoId(req.params);
+    const id = trackId(req.params);
+    if (/^local-[a-f0-9]{64}$/.test(id)) return { ok: !!(await importedAudio(id)) };
     const track = await knownTrack(id);
     if (!track || !(await localAudio(track))) await resolveFastAudio(id);
     return { ok: true };
@@ -152,7 +176,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.get("/api/lyrics/:id", async (req, reply) => {
-    const track = await knownTrack(videoId(req.params));
+    const track = await knownTrack(trackId(req.params));
     const lrc = track ? await localLyrics(track) : null;
     if (!lrc) return reply.code(404).send({ error: "No synchronized lyrics available for this recording." });
     return { format: "lrc", text: lrc, source: "MusicGrabber" };
@@ -160,7 +184,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   // Lightweight truthful source probe; never returns a filesystem path.
   app.get("/api/local/track/:id", async (req) => {
-    const track = await knownTrack(videoId(req.params));
+    const track = await knownTrack(trackId(req.params));
     return { local: !!(track && await localAudio(track)) };
   });
 
@@ -177,7 +201,12 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.get("/api/stream/:id/audio", async (req, reply) => {
-    const id = videoId(req.params);
+    const id = trackId(req.params);
+    if (/^local-[a-f0-9]{64}$/.test(id)) {
+      const file = await importedAudio(id);
+      if (!file) return reply.code(404).send({ error: "Imported audio not found" });
+      return serveFile(req, reply, file.file, file.mime);
+    }
     const forceYoutube = (req.query as { youtube?: string }).youtube === "1";
     if (!forceYoutube) {
       const track = await knownTrack(id);
@@ -215,7 +244,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   app.put("/api/favorites/:id", async (req) => {
     const track = library.sanitizeTrack(req.body);
-    if (track.id !== videoId(req.params)) throw new HttpError(400, msg("idMismatch"));
+    if (track.id !== trackId(req.params)) throw new HttpError(400, msg("idMismatch"));
     return { favorites: await library.addFavorite(track) };
   });
 
@@ -226,7 +255,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return { favorites: await library.addFavorites(tracks.slice(0, 500).map(library.sanitizeTrack)) };
   });
 
-  app.delete("/api/favorites/:id", async (req) => ({ favorites: await library.removeFavorite(videoId(req.params)) }));
+  app.delete("/api/favorites/:id", async (req) => ({ favorites: await library.removeFavorite(trackId(req.params)) }));
 
   app.post("/api/history", async (req) => ({ history: await library.pushHistory(library.sanitizeTrack(req.body)) }));
 
@@ -255,7 +284,7 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   });
 
   app.delete("/api/playlists/:pid/tracks/:id", async (req) =>
-    library.removeFromPlaylist((req.params as { pid: string }).pid, videoId(req.params)),
+    library.removeFromPlaylist((req.params as { pid: string }).pid, trackId(req.params)),
   );
 
   // Web app (production build)

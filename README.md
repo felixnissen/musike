@@ -29,6 +29,7 @@ Windows x64: clone this fork and run `install.cmd`, then `start.cmd`. Alternativ
 ## Contents
 
 - [What it is](#what-it-is)
+- [Music import](#music-import-preview)
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
@@ -52,19 +53,34 @@ Musike started from the idea behind the old Discord music bots: a server that fe
 - **Any screen:** designed for phones of every size, tablets, laptops and big monitors.
 - **Yours:** it runs on your own computer. Playlists and favorites live in a local file you can export and take to any other Musike.
 
-## Music import (planned unified menu)
+## Music import (preview)
 
-One library, multiple sources. This is a design concept; Suno integration and automatic sync are not implemented yet.
+One library, multiple sources. Open **Library → Import music** on the desktop or mobile app.
 
-<img src="docs/screenshots/import-menu-concept.png" width="360" alt="Unified import menu: YouTube, Suno, Spotify, MusicGrabber and local files" />
+<img src="docs/screenshots/import-menu-implemented.png" width="360" alt="Actual Swedish Musike import menu: YouTube, Suno, Spotify, MusicGrabber and local music files" />
 
-- **YouTube:** tracks, playlists and links.
-- **Suno:** your own creations, artwork, lyrics, metadata and optional incremental sync, subject to account permissions.
-- **Spotify:** playlists, favorites and track matching.
-- **MusicGrabber:** search and retrieve available music where permitted.
-- **Local music:** files, folders and watched libraries.
+The screenshot above is from a real browser smoke test of the implemented menu. [Original design concept](docs/screenshots/import-menu-concept.png).
 
-All sources are intended to share the import queue, duplicate detection, metadata and audio analysis. No separate Suno app is planned.
+- **YouTube:** search or preview an individual link; preview and save up to 500 entries from a public playlist on desktop.
+- **Suno:** import your own authorized MP3/WAV exports directly, including multi-song ZIP archives. On desktop choose a dedicated export folder once; Musike imports newly saved files while running, without modifying originals.
+- **Spotify:** paste track names and artists or select a JSON/TXT export, then review matching tracks in the existing batch search (up to 50 at a time). The existing Spotify URL import script remains available under `tools/`.
+- **MusicGrabber:** existing local playback matching and private mobile pairing, a shortcut to the suite's local MusicGrabber UI, plus file/ZIP import and optional folder monitoring.
+- **Local music:** choose multiple supported audio files or ZIPs; desktop can also monitor a folder.
+
+Suno, MusicGrabber and local file imports share one content-hash-based audio store and commit each file to the corresponding playlist immediately. Exact duplicate bytes reuse the same local track ID; local IDs never fall back to YouTube audio. Imported files are copied to Musike's private data directory. Basic embedded tags/duration are read when FFprobe is available, otherwise filenames provide the fallback. Mobile can use the existing private music connection to a compatible desktop and synced library; native file upload is desktop-only.
+
+### Suno setup
+
+1. Open Musike → Library → Import music → Suno.
+2. Select **Automatically watch a folder** and choose a dedicated Suno export folder.
+3. In Suno, use the authorized Download or Download All option and save the audio file or ZIP there. See [Suno's download instructions](https://help.suno.com/en/articles/2409921).
+4. Musike checks the selected folder about once a minute while running, and imports new exports into the Suno playlist. You can also use Sync now or drag/select individual exports in the file picker.
+
+Direct Suno/Spotify account authorization and cloud-library synchronization are not implemented. Suno's plan download limits still apply. The local import endpoint accepts files up to 128 MiB; ZIP archives may expand to at most 512 MiB and cannot be encrypted or multi-disk. Larger archives can be unpacked in a dedicated watched folder. Folder monitoring scans up to four levels deep, processes up to 25 new files per pass, and skips symbolic links. Imported cover art, lyrics, generation prompts, stems management and deeper audio analysis are not yet integrated.
+
+### Verification
+
+The source preview passed the full 13-test server suite, TypeScript checks for server/web/native/desktop, web and native production builds, the Electron bundle, and an isolated Chromium smoke test of the five buttons, actual audio import, playlist persistence and decoding. The existing released installer is not changed by this source preview. Live Suno/Spotify/YouTube account or service tests and a clean desktop/mobile installer test remain outstanding.
 
 ## Features
 

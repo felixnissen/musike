@@ -19,6 +19,7 @@ export async function streamWithPeer(id: string): Promise<string> {
       else if (!response.ok) unavailableUntil = Date.now() + 10_000;
     } catch { unavailableUntil = Date.now() + 10_000; }
   }
+  if (/^local-[a-f0-9]{64}$/.test(id)) throw new Error("Imported audio requires the paired Musike computer.");
   return (await resolveAudio(id)).url;
 }
 
@@ -26,6 +27,6 @@ export async function streamWithPeer(id: string): Promise<string> {
 export function forgetPeerStream(url: string): void {
   const peer = readPeer();
   if (!peer.url || !url.startsWith(peer.url + "/v1/stream/")) return;
-  const found = /\/v1\/stream\/([\w-]{11})/.exec(url);
+  const found = /\/v1\/stream\/([\w-]{11}|local-[a-f0-9]{64})\?/.exec(url);
   if (found) rejects.set(found[1], Date.now() + 90_000);
 }

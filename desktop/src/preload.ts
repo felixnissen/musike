@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld("musikeDesktop", {
   setTheme: (theme: "dark" | "light") => ipcRenderer.send("musike:theme", theme),
   setLanguage: (lang: string) => ipcRenderer.send("musike:lang", lang),
   retry: () => ipcRenderer.send("musike:retry"),
+  importWatch: (source: "suno" | "local" | "musicgrabber", action: "status" | "choose" | "stop" | "scan") => ipcRenderer.invoke("musike:import-watch", source, action),
 });

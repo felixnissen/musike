@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, Menu, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } from "electron";
 import type { RunningServer } from "../../server/src/app.js";
 import { backupLibraryOnUpdate } from "./backup.js";
 
@@ -33,6 +33,7 @@ backupLibraryOnUpdate(userData, app.getVersion());
 // The server reads its config when first imported, so load it only after the env above is set.
 const loadServer = async () => ({
   ...(await import("../../server/src/app.js")),
+  ...(await import("../../server/src/importWatch.js")),
   ...(await import("../../server/src/bootstrap.js")),
   ...(await import("../../server/src/tools.js")),
   ...(await import("../../server/src/i18n.js")),
@@ -159,6 +160,7 @@ function createMainWindow(url: string): BrowserWindow {
 
 let mainWindow: BrowserWindow | null = null;
 let server: RunningServer | null = null;
+let stopWatch: (()=>void) | null = null;
 
 async function launch() {
   const splash = createSplash();
@@ -172,6 +174,7 @@ async function launch() {
     await s.refreshTools();
     await s.ensureEssentials();
     server ??= await s.startServer({ port: PORT, host: "127.0.0.1", portFallback: true });
+    stopWatch ??= s.startWatchMonitor();
     // FFmpeg is only needed for HD and some videos: fetch it in the background.
     s.ensureComponent("ffmpeg").catch(() => {});
   } catch (err) {
@@ -185,6 +188,21 @@ async function launch() {
   mainWindow = createMainWindow(`http://127.0.0.1:${server.port}`);
   mainWindow.once("ready-to-show", () => splash.destroy());
 }
+
+ipcMain.handle("musike:import-watch", async (event, source: unknown, action: unknown) => {
+  if (!mainWindow || !server || event.sender !== mainWindow.webContents || !event.senderFrame || new URL(event.senderFrame.url).origin !== "http://127.0.0.1:" + server.port) throw new Error("Untrusted sender");
+  if (source !== "suno" && source !== "local" && source !== "musicgrabber") throw new Error("Invalid source");
+  const s = await import("../../server/src/importWatch.js");
+  if (action === "status") return s.watchStatus(source);
+  if (action === "stop") return s.configureWatch(source, null);
+  if (action === "choose") {
+    const result = await dialog.showOpenDialog(mainWindow, {properties:["openDirectory"],title:"Choose a dedicated music import folder"});
+    if (!result.canceled && result.filePaths[0]) { await s.configureWatch(source,result.filePaths[0]); void s.runWatch().catch(()=>{}); }
+    return s.watchStatus(source);
+  }
+  if (action === "scan") { await s.runWatch(); return s.watchStatus(source); }
+  throw new Error("Invalid watch action");
+});
 
 ipcMain.on("musike:theme", (event, theme: "dark" | "light") => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -217,7 +235,7 @@ app.on("second-instance", () => {
 });
 
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => void server?.close());
+app.on("before-quit", () => { stopWatch?.(); void server?.close(); });
 
 void app.whenReady().then(() => {
   // macOS needs an app menu: without the Edit menu, Cmd+C/V/A don't reach text fields, and Cmd+Q has no home.

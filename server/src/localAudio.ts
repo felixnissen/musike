@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { lstat, readdir, realpath, open, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Track } from "./types.js";
+import { importedAudio } from "./importAudio.js";
 
 // MusicGrabber's default Windows library: Music/MusicGrabber/Singles/<Artist>/<Title>.ext.
 // No files are moved, written or modified by Musike.
@@ -138,6 +139,7 @@ async function ensureIndex() {
 }
 
 export async function localAudio(track: Track): Promise<Entry | null> {
+  if (/^local-[a-f0-9]{64}$/.test(track.id)) return importedAudio(track.id);
   if (track.kind !== "song" || !track.artist || !track.title) return null;
   await ensureIndex();
   const found = cache.get(key(track.artist, track.title));
@@ -162,6 +164,7 @@ export async function localMusicStatus() {
  * No raw filenames or paths are accepted from HTTP clients.
  */
 export async function localLyrics(track: Track): Promise<string | null> {
+  if (/^local-[a-f0-9]{64}$/.test(track.id)) return null;
   const item = await localAudio(track);
   if (!item) return null;
   const sidecar = item.file.slice(0, -path.extname(item.file).length) + ".lrc";

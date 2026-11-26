@@ -323,6 +323,13 @@ export function downloadHd(id: string): Promise<string> {
   return job;
 }
 
+export async function ytdlpPlaylist(id: string) {
+  if (!/^[A-Za-z0-9_-]{10,100}$/.test(id)) throw new HttpError(400, "Invalid YouTube playlist ID");
+  const stdout = await run(["-J", "--flat-playlist", "--no-warnings", "--playlist-end", "500", "--", "https://www.youtube.com/playlist?list=" + id], RESOLVE_TIMEOUT_MS);
+  const data = JSON.parse(stdout) as { title?: string; entries?: { id: string; title: string; duration?: number; channel?: string; uploader?: string }[] };
+  return { title: data.title || "YouTube playlist", entries: (data.entries || []).slice(0,500) };
+}
+
 export async function ytdlpSearch(query: string, limit = 20) {
   const stdout = await run(["-J", "--flat-playlist", "--no-warnings", `ytsearch${limit}:${query}`], RESOLVE_TIMEOUT_MS);
   const data = JSON.parse(stdout) as {

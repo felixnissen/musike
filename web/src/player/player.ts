@@ -124,6 +124,7 @@ const clipFor = new Map<string, string | null>();
 const clipLookups = new Map<string, Promise<string | null>>();
 
 function lookupClip(track: Track): Promise<string | null> {
+  if (/^local-[a-f0-9]{64}$/.test(track.id)) return Promise.resolve(null);
   if (track.kind === "video") return Promise.resolve(track.id);
   if (clipFor.has(track.id)) return Promise.resolve(clipFor.get(track.id)!);
   let lookup = clipLookups.get(track.id);
@@ -145,7 +146,7 @@ function lookupClip(track: Track): Promise<string | null> {
 }
 
 const needsClipLookup = (track: Track, preferVideo: boolean) =>
-  preferVideo && track.kind === "song" && !clipFor.has(track.id);
+  preferVideo && !/^local-[a-f0-9]{64}$/.test(track.id) && track.kind === "song" && !clipFor.has(track.id);
 
 export const usePlayer = create<PlayerState>((set, get) => {
   const kindFor = (track: Track): Kind =>
@@ -231,7 +232,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
       } else {
         // Android receives a direct private peer URL or a resolved YouTube URL.
         // The source is confirmed when the media element starts playing.
-        set({ playbackSource: /\/v1\/stream\/[A-Za-z0-9_-]{11}\?/.test(src)
+        set({ playbackSource: /\/v1\/stream\/(?:[A-Za-z0-9_-]{11}|local-[a-f0-9]{64})\?/.test(src)
           ? "local" : "youtube" });
       }
       media.src = src;

@@ -106,12 +106,12 @@ export function TrackMenu() {
         </Item>
       )}
       <div className="mx-3 my-1 h-px bg-line" />
-      <Item
+      {!/^local-[a-f0-9]{64}$/.test(menu.track.id) && <Item
         icon={<ArrowSquareOutIcon size={18} />}
         onClick={run(() => window.open(`https://www.youtube.com/watch?v=${menu.track.id}`, "_blank", "noopener"))}
       >
         {t.trackMenu.openYoutube}
-      </Item>
+      </Item>}
     </div>
   );
 

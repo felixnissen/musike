@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { config } from "../src/config.js";
+import { startServer } from "../src/app.js";
+const modulePath=process.env.MUSIKE_PLAYWRIGHT_MODULE;
+if(!modulePath) throw new Error("Set MUSIKE_PLAYWRIGHT_MODULE to the installed Playwright index.mjs");
+const { chromium }=await import(pathToFileURL(modulePath).href);
+const dir=await mkdtemp(path.join(tmpdir(),"musike-import-ui-"));
+config.dataDir=dir;config.cacheDir=path.join(dir,"cache");
+delete process.env.MUSIKE_PEER_ENABLED;
+const s=await startServer({host:"127.0.0.1",port:48918,portFallback:true});
+let browser;
+try {
+  browser=await chromium.launch({headless:true,executablePath:process.env.MUSIKE_BROWSER_EXE});
+  const page=await browser.newPage({viewport:{width:420,height:900},locale:"sv-SE"});
+  const errors:string[]=[];
+  page.on("pageerror",(e:Error)=>errors.push(e.message));
+  const base="http://127.0.0.1:"+s.port;
+  await page.goto(base+"/library");
+  await page.getByRole("link",{name:"Importera musik"}).click();
+  for(const name of ["YouTube","Suno","Spotify","MusicGrabber","Egna musikfiler"]){
+    await page.getByRole("button",{name:new RegExp("^"+name)}).click();
+    await page.getByRole("heading",{name,exact:true}).waitFor();
+    await page.getByRole("button",{name:"Alla källor"}).click();
+  }
+  if(process.env.MUSIKE_IMPORT_SCREENSHOT)await page.screenshot({path:process.env.MUSIKE_IMPORT_SCREENSHOT});
+  await page.getByRole("button",{name:/^Suno/}).click();
+  const b=Buffer.alloc(16044);b.write("RIFF",0);b.writeUInt32LE(b.length-8,4);b.write("WAVEfmt ",8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(8000,24);b.writeUInt32LE(16000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write("data",36);b.writeUInt32LE(16000,40);
+  await page.locator('input[type="file"]').setInputFiles({name:"Test - Suno sample.wav",mimeType:"audio/wav",buffer:b});
+  await page.getByRole("button",{name:"Importera till biblioteket"}).click();
+  await page.getByText(/Nya: 1/).waitFor();
+  const lib=await (await page.request.get(base+"/api/library")).json();
+  assert.equal(lib.playlists[0].name,"Suno");assert.equal(lib.playlists[0].tracks.length,1);
+  const duration=await page.evaluate(async(id:string)=>{const a=new Audio("/api/stream/"+id+"/audio");return new Promise<number>((resolve,reject)=>{a.addEventListener("loadedmetadata",()=>resolve(a.duration),{once:true});a.addEventListener("error",()=>reject(new Error("Audio decode failed")),{once:true});a.load();});},lib.playlists[0].tracks[0].id);
+  assert.equal(duration,1);
+  assert.deepEqual(errors,[]);
+  console.log("UI_SMOKE_OK: all five source buttons, file picker, import status, saved library and real audio decode");
+}finally{await browser?.close();await s.close();await rm(dir,{recursive:true,force:true});}

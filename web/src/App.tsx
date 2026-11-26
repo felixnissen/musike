@@ -29,6 +29,7 @@ import Collection from "./views/Collection";
 import Genre from "./views/Genre";
 import Home from "./views/Home";
 import Library from "./views/Library";
+import ImportMusic from "./views/ImportMusic";
 import NewReleases from "./views/NewReleases";
 import Search from "./views/Search";
 
@@ -67,6 +68,22 @@ export default function App() {
     const interval = window.setInterval(poll, 120_000);
     return () => { window.clearTimeout(initial); window.clearInterval(interval); };
   }, []);
+
+  // Refresh the library when a desktop folder monitor discovers new imports.
+  useEffect(() => {
+    if (!desktop?.importWatch) return;
+    let last = "", busy = false;
+    const refresh = async () => {
+      if (busy) return; busy = true;
+      try {
+        const statuses = await Promise.all((["suno","local","musicgrabber"] as const).map(s => desktop!.importWatch!(s,"status")));
+        const stamp = statuses.map(s => s ? s.folder + ":" + s.tracked : "").join("|");
+        if (stamp !== last) { last = stamp; await loadLibrary(); }
+      } catch { /* older shell / shutting down */ } finally { busy = false; }
+    };
+    const timer = setInterval(()=>void refresh(),15000);
+    return ()=>clearInterval(timer);
+  },[loadLibrary]);
 
   // Check yt-dlp shortly after start and say so once if something needs doing (not on Android: no yt-dlp there).
   useEffect(() => {
@@ -147,6 +164,7 @@ export default function App() {
               <Route path="/search/artist/:id" element={<Artist />} />
               <Route path="/search/album/:id" element={<Album />} />
               <Route path={paths.library} element={<Library />} />
+              <Route path={paths.importMusic} element={<ImportMusic />} />
               <Route path={paths.newReleases} element={<NewReleases />} />
               <Route path={paths.favorites} element={<Collection kind="favorites" />} />
               <Route path={paths.history} element={<Collection kind="history" />} />

@@ -6,7 +6,7 @@ import path from "node:path";
 import { config } from "./config.js";
 import * as library from "./library.js";
 import { localAudio, localLyrics, localMusicStatus } from "./localAudio.js";
-import { VIDEO_ID } from "./types.js";
+import { TRACK_ID } from "./types.js";
 import { getAccountState, loginAccount, logout, registerAccount, SyncError, updateAccountState } from "./accountSync.js";
 
 const PORT = Number(process.env.MUSIKE_PEER_PORT || 4283);
@@ -128,8 +128,8 @@ export async function startMusicPeerServer(): Promise<() => Promise<void>> {
         return send(200, { version: 1, total: tracks.length, tracks });
       }
       if (req.method !== "GET" && req.method !== "HEAD") return send(405, { error: "method" });
-      const lyricMatch = /^\/v1\/lyrics\/([\w-]{11})$/.exec(url.pathname);
-      if (lyricMatch && VIDEO_ID.test(lyricMatch[1])) {
+      const lyricMatch = /^\/v1\/lyrics\/([\w-]{11}|local-[a-f0-9]{64})$/.exec(url.pathname);
+      if (lyricMatch && TRACK_ID.test(lyricMatch[1])) {
         const id = lyricMatch[1];
         const lib = await library.getLibrary();
         const track = [...lib.favorites, ...lib.history, ...lib.playlists.flatMap((p) => p.tracks)]
@@ -138,8 +138,8 @@ export async function startMusicPeerServer(): Promise<() => Promise<void>> {
         if (!lrc) return send(404, { error: "Lyrics not found" });
         return send(200, { format: "lrc", text: lrc, source: "MusicGrabber" });
       }
-      const match = /^\/v1\/(available|stream)\/([\w-]{11})$/.exec(url.pathname);
-      if (!match || !VIDEO_ID.test(match[2])) return send(404, { error: "not found" });
+      const match = /^\/v1\/(available|stream)\/([\w-]{11}|local-[a-f0-9]{64})$/.exec(url.pathname);
+      if (!match || !TRACK_ID.test(match[2])) return send(404, { error: "not found" });
       const [, action, id] = match;
       const saved = await library.getLibrary();
       const track = [...saved.favorites, ...saved.history, ...saved.playlists.flatMap((x) => x.tracks)]
