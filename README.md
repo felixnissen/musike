@@ -76,11 +76,21 @@ Suno, MusicGrabber and local file imports share one content-hash-based audio sto
 3. In Suno, use the authorized Download or Download All option and save the audio file or ZIP there. See [Suno's download instructions](https://help.suno.com/en/articles/2409921).
 4. Musike checks the selected folder about once a minute while running, and imports new exports into the Suno playlist. You can also use Sync now or drag/select individual exports in the file picker.
 
-Direct Suno/Spotify account authorization and cloud-library synchronization are not implemented. Suno's plan download limits still apply. The local import endpoint accepts files up to 128 MiB; ZIP archives may expand to at most 512 MiB and cannot be encrypted or multi-disk. Larger archives can be unpacked in a dedicated watched folder. Folder monitoring scans up to four levels deep, processes up to 25 new files per pass, and skips symbolic links. Imported cover art, lyrics, generation prompts, stems management and deeper audio analysis are not yet integrated.
+Suno now has an experimental official account connection in the desktop app. Spotify account authorization is not implemented. Suno's plan download limits still apply. The local import endpoint accepts files up to 128 MiB; ZIP archives may expand to at most 512 MiB and cannot be encrypted or multi-disk. Larger archives can be unpacked in a dedicated watched folder. Folder monitoring scans up to four levels deep, processes up to 25 new files per pass, and skips symbolic links. The official account importer stores available lyrics and style metadata locally; the lyrics panel displays original text without inventing timestamps. Full cover-art integration, prompt display, stems management and deeper audio analysis remain outstanding.
+
+### Suno account connection (experimental desktop preview)
+
+In the Suno import panel, choose **Connect Suno**, sign in through Suno's own OAuth page, and load your own library. The connector uses the [official Suno MCP server](https://help.suno.com/en/articles/14551425), not browser cookies or private endpoints. Authentication uses PKCE and OS-protected local token storage when available.
+
+Import a selected song directly, subject to the account's download allocation. If Suno requires a download credit, Musike shows a native confirmation dialog first. Already-imported Suno IDs and identical audio bytes are deduplicated.
+
+Optionally enable automatic import of previously downloaded songs: checks every five minutes, processes up to five candidates per pass, and never confirms new credit expenditure automatically. The normal ZIP/export-folder workflow remains available without account authorization.
+
+The OAuth, catalog, download-credit gate, duplicate handling, metadata and automatic-import path passed a simulated-service integration test (no real Suno account or download credits used). The official live endpoint and OAuth discovery metadata were reachable; authenticated end-to-end testing still requires a real Suno account. This is not yet a production-ready account integration.
 
 ### Verification
 
-The source preview passed the full 13-test server suite, TypeScript checks for server/web/native/desktop, web and native production builds, the Electron bundle, and an isolated Chromium smoke test of the five buttons, actual audio import, playlist persistence and decoding. The existing released installer is not changed by this source preview. Live Suno/Spotify/YouTube account or service tests and a clean desktop/mobile installer test remain outstanding.
+The source preview passed the full 13-test server suite, TypeScript checks for server/web/native/desktop, web and native production builds, the Electron bundle, and an isolated Chromium smoke test of the five buttons, actual audio import, playlist persistence and decoding. The existing released installer is not changed by this source preview. Live authenticated Suno/Spotify/YouTube service tests and a clean desktop/mobile installer test remain outstanding.
 
 ## Features
 

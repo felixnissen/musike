@@ -13,6 +13,7 @@ import { proxyStream, serveFile } from "./stream.js";
 import { langOf, msg, tr } from "./i18n.js";
 import { presentJob, startJob, systemInfo, type Channel } from "./system.js";
 import { refreshTools, type Tools } from "./tools.js";
+import { readSunoMetadata } from "./importMetadata.js";
 import { importZip } from "./importZip.js";
 import { IMPORT_LIMIT, importAudioToLibrary, importedAudio } from "./importAudio.js";
 import { HttpError, VIDEO_ID, TRACK_ID } from "./types.js";
@@ -177,6 +178,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
 
   app.get("/api/lyrics/:id", async (req, reply) => {
     const track = await knownTrack(trackId(req.params));
+    const metadata = track ? await readSunoMetadata(track.id) : null;
+    if(metadata?.lyrics)return {format:"plain",text:metadata.lyrics,source:"Suno"};
     const lrc = track ? await localLyrics(track) : null;
     if (!lrc) return reply.code(404).send({ error: "No synchronized lyrics available for this recording." });
     return { format: "lrc", text: lrc, source: "MusicGrabber" };

@@ -77,7 +77,8 @@ export default function App() {
       if (busy) return; busy = true;
       try {
         const statuses = await Promise.all((["suno","local","musicgrabber"] as const).map(s => desktop!.importWatch!(s,"status")));
-        const stamp = statuses.map(s => s ? s.folder + ":" + s.tracked : "").join("|");
+        const suno = await desktop?.suno?.("status").catch(()=>null);
+        const stamp = statuses.map(s => s ? s.folder + ":" + s.tracked : "").join("|") + ":" + (suno?.lastAuto?.at || 0);
         if (stamp !== last) { last = stamp; await loadLibrary(); }
       } catch { /* older shell / shutting down */ } finally { busy = false; }
     };

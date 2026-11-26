@@ -41,7 +41,7 @@ export function lyricAt(lines: LyricLine[], position: number): number {
  * LRCLIB is only consulted when local lyrics are missing; exact title/artist
  * and duration protect against using lyrics for the wrong recording.
  */
-export interface LyricsResult { lines: LyricLine[]; source: "MusicGrabber" | "LRCLIB" | null }
+export interface LyricsResult { lines: LyricLine[]; source: "MusicGrabber" | "LRCLIB" | "Suno" | null; plain?:string }
 export interface LyricsTrack { id: string; title: string; artist: string; duration: number }
 const fallbackCache = new Map<string, { until: number; result: LyricsResult }>();
 const norm = (v: string) => v.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
@@ -105,6 +105,7 @@ export async function fetchLyrics(track: LyricsTrack, signal?: AbortSignal): Pro
       });
       if (res.ok) {
         const value = await res.json() as { text?: string; format?: string };
+        if(value.format==="plain"&&typeof value.text==="string")return {lines:[],source:"Suno",plain:value.text.slice(0,50000)};
         if (value.format === "lrc" && typeof value.text === "string") {
           const lines = parseLrc(value.text);
           if (lines.length) return { lines, source: "MusicGrabber" };
@@ -112,6 +113,6 @@ export async function fetchLyrics(track: LyricsTrack, signal?: AbortSignal): Pro
       }
     } catch { /* Local peer unavailable: try LRCLIB, not an unrelated local file */ }
   }
-  if (signal?.aborted) return { lines: [], source: null };
+  if (signal?.aborted || /^local-[a-f0-9]{64}$/.test(track.id)) return { lines: [], source: null };
   return lrclib(track, signal);
 }

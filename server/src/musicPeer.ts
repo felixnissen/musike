@@ -6,6 +6,7 @@ import path from "node:path";
 import { config } from "./config.js";
 import * as library from "./library.js";
 import { localAudio, localLyrics, localMusicStatus } from "./localAudio.js";
+import { readSunoMetadata } from "./importMetadata.js";
 import { TRACK_ID } from "./types.js";
 import { getAccountState, loginAccount, logout, registerAccount, SyncError, updateAccountState } from "./accountSync.js";
 
@@ -134,6 +135,8 @@ export async function startMusicPeerServer(): Promise<() => Promise<void>> {
         const lib = await library.getLibrary();
         const track = [...lib.favorites, ...lib.history, ...lib.playlists.flatMap((p) => p.tracks)]
           .find((t) => t.id === id);
+        const metadata = track ? await readSunoMetadata(track.id) : null;
+        if(metadata?.lyrics)return send(200,{format:"plain",text:metadata.lyrics,source:"Suno"});
         const lrc = track ? await localLyrics(track) : null;
         if (!lrc) return send(404, { error: "Lyrics not found" });
         return send(200, { format: "lrc", text: lrc, source: "MusicGrabber" });

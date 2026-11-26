@@ -187,7 +187,33 @@ async function launch() {
   clearInterval(report);
   mainWindow = createMainWindow(`http://127.0.0.1:${server.port}`);
   mainWindow.once("ready-to-show", () => splash.destroy());
+  sunoTimer??=setInterval(()=>void autoSuno(),5*60_000);
 }
+
+let sunoBusy=false;
+let sunoTimer:ReturnType<typeof setInterval>|undefined;
+async function autoSuno(){if(sunoBusy)return;sunoBusy=true;try{const s=await import("./suno.js");await s.sunoAutoTick();}catch{/* offline or disabled */}finally{sunoBusy=false;}}
+ipcMain.handle("musike:suno", async (event, action: unknown, value: unknown) => {
+  if (!mainWindow || !server || event.sender !== mainWindow.webContents || !event.senderFrame || new URL(event.senderFrame.url).origin !== "http://127.0.0.1:" + server.port) throw new Error("Untrusted sender");
+  const s=await import("./suno.js");
+  if(action==="status")return s.sunoStatus();
+  if(sunoBusy)throw new Error("Suno is busy");sunoBusy=true;
+  try {
+    if(action==="connect")return await s.connectSuno();
+    if(action==="disconnect")return await s.disconnectSuno();
+    if(action==="library")return await s.sunoLibrary(typeof value==="string"?value.slice(0,2000):undefined);
+    if(action==="auto-on")return await s.setSunoAuto(true);
+    if(action==="auto-off")return await s.setSunoAuto(false);
+    if(action==="auto-now")return await s.sunoAutoTick(true);
+    if(action==="download"&&typeof value==="string"){
+      const r=await s.sunoDownload(value);
+      if(r.status!=="requires_credit")return r;
+      const answer=await dialog.showMessageBox(mainWindow,{type:"question",buttons:["Cancel","Use one Suno download credit"],defaultId:0,cancelId:0,message:"Suno requires a download credit for this song.",detail:"Only continue if you want to use one of your Suno download credits."});
+      return answer.response===1?await s.sunoDownload(value,true):{status:"cancelled"};
+    }
+    throw new Error("Invalid Suno action");
+  }finally{sunoBusy=false;}
+});
 
 ipcMain.handle("musike:import-watch", async (event, source: unknown, action: unknown) => {
   if (!mainWindow || !server || event.sender !== mainWindow.webContents || !event.senderFrame || new URL(event.senderFrame.url).origin !== "http://127.0.0.1:" + server.port) throw new Error("Untrusted sender");
@@ -235,7 +261,7 @@ app.on("second-instance", () => {
 });
 
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => { stopWatch?.(); void server?.close(); });
+app.on("before-quit", () => { if(sunoTimer)clearInterval(sunoTimer);stopWatch?.(); void server?.close(); });
 
 void app.whenReady().then(() => {
   // macOS needs an app menu: without the Edit menu, Cmd+C/V/A don't reach text fields, and Cmd+Q has no home.

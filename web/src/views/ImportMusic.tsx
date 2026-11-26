@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, CaretRightIcon, DownloadSimpleIcon, FolderOpenIcon, YoutubeLogoIcon, SpotifyLogoIcon, MusicNotesIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
+import { SunoConnect } from "../components/SunoConnect";
 import { desktop, type ImportWatchStatus } from "../lib/desktop";
 import { Link, useNavigate } from "react-router";
 import { PageHeader } from "../components/Page";
@@ -149,7 +150,8 @@ export default function ImportMusic() {
           {(source === "youtube" || source === "spotify") && <div role="status" className="text-sm text-fg-2">{messages.map((m,i)=><p key={i}>{m}</p>)}</div>}
           {source === "musicgrabber" && <><PeerMusicSection />{capabilities.video && <a href="http://127.0.0.1:38274" target="_blank" rel="noreferrer" className="text-accent-text underline">{tr("Öppna MusicGrabber (Musike Suite)", "Open MusicGrabber (Musike Suite)")}</a>}</> }
           {source === "suno" && <>
-            <p className="text-sm text-fg-2">{tr("Exportera dina egna låtar från Suno, enskilt eller som ZIP. Välj exportmapp för automatisk lokal import. Direkt kontosynkning är inte ansluten.", "Export your own tracks from Suno individually or as ZIP. Choose an export folder for automatic local imports. Direct account sync is not connected.")}</p>
+            <SunoConnect />
+            <p className="text-sm text-fg-2">{tr("Exportera dina egna låtar från Suno, enskilt eller som ZIP. Välj exportmapp för automatisk lokal import. Direkt kontokoppling finns som experimentell förhandsversion på datorn.", "Export your own tracks from Suno individually or as ZIP. Choose an export folder for automatic local imports. Direct account connection is an experimental desktop preview.")}</p>
             <a href="https://suno.com/" target="_blank" rel="noreferrer" className="text-accent-text underline">{tr("Öppna Suno", "Open Suno")}</a>
           </>}
           {watchSource && desktop?.importWatch && <div className="flex flex-col gap-2 rounded-xl bg-bg p-3">

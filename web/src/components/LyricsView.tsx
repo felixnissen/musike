@@ -7,6 +7,7 @@ export function LyricsView({ compact = false }: { compact?: boolean }) {
   const position = usePlayer((s) => s.position);
   const seek = usePlayer((s) => s.seek);
   const [lines, setLines] = useState<LyricLine[]>([]);
+  const [plain,setPlain]=useState("");
   const [source, setSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const active = lyricAt(lines, position);
@@ -14,14 +15,14 @@ export function LyricsView({ compact = false }: { compact?: boolean }) {
   const currentId = track?.id;
 
   useEffect(() => {
-    setLines([]);
+    setLines([]);setPlain("");
     setSource(null);
     if (!track || !currentId) return;
     const ctrl = new AbortController();
     setLoading(true);
     void fetchLyrics(track, ctrl.signal).then((result) => {
       if (!ctrl.signal.aborted) {
-        setLines(result.lines);
+        setLines(result.lines);setPlain(result.plain||"");
         setSource(result.source);
       }
     }).finally(() => {
@@ -36,6 +37,7 @@ export function LyricsView({ compact = false }: { compact?: boolean }) {
 
   if (!track) return <p className="p-5 text-sm text-fg-2">Spela en låt för att visa text.</p>;
   if (loading) return <p className="p-5 text-sm text-fg-2">Letar efter synkad låttext…</p>;
+  if(plain)return <div className="scroll-area h-full overflow-y-auto p-5"><p className="mb-3 text-xs text-fg-3">Suno · Ej tidssynkad text</p><p className="whitespace-pre-wrap text-center text-lg leading-8">{plain}</p></div>;
   if (!lines.length) return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-5 py-8 text-center">
       <p className="text-sm font-medium">Ingen synkad låttext hittades</p>

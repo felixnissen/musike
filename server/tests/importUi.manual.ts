@@ -37,5 +37,11 @@ try {
   const duration=await page.evaluate(async(id:string)=>{const a=new Audio("/api/stream/"+id+"/audio");return new Promise<number>((resolve,reject)=>{a.addEventListener("loadedmetadata",()=>resolve(a.duration),{once:true});a.addEventListener("error",()=>reject(new Error("Audio decode failed")),{once:true});a.load();});},lib.playlists[0].tracks[0].id);
   assert.equal(duration,1);
   assert.deepEqual(errors,[]);
+  const desktopPage=await browser.newPage({viewport:{width:520,height:1000},locale:"sv-SE"});
+  await desktopPage.addInitScript(()=>{let connected=false,auto=false;Object.defineProperty(window,"musikeDesktop",{value:{platform:"win32",setTheme:()=>{},setLanguage:()=>{},suno:async(action:string)=>{if(action==="connect")connected=true;if(action==="disconnect")connected=false;if(action==="auto-on")auto=true;if(action==="auto-off")auto=false;if(action==="library")return {songs:[{id:"test-clip",title:"Test song"}]};if(action==="download")return {status:"imported"};return {connected,auto};}}});});
+  await desktopPage.goto(base+"/library/import");await desktopPage.getByRole("button",{name:/^Suno/}).click();
+  if(process.env.MUSIKE_SUNO_SCREENSHOT)await desktopPage.screenshot({path:process.env.MUSIKE_SUNO_SCREENSHOT});
+  await desktopPage.getByRole("button",{name:"Anslut Suno",exact:true}).click();await desktopPage.getByRole("button",{name:"Hämta bibliotek"}).click();await desktopPage.getByText("Test song",{exact:true}).waitFor();await desktopPage.getByRole("checkbox",{name:"Autoimportera redan nedladdade låtar"}).check();await desktopPage.getByRole("button",{name:"Importera",exact:true}).click();await desktopPage.getByRole("button",{name:"Importerad",exact:true}).waitFor();await desktopPage.getByRole("button",{name:"Koppla från"}).click();await desktopPage.getByRole("button",{name:"Anslut Suno",exact:true}).waitFor();
+  console.log("SUNO_UI_MOCK_OK: connect, library, auto toggle, import and disconnect");
   console.log("UI_SMOKE_OK: all five source buttons, file picker, import status, saved library and real audio decode");
 }finally{await browser?.close();await s.close();await rm(dir,{recursive:true,force:true});}
