@@ -1,0 +1,9 @@
+# Favorite-to-library (Heart Grabber)
+
+New desktop favorites can opt in to an automatic MusicGrabber job. The existing favorite remains a normal Musike library entry, and the original playback keeps going. MusicGrabber 4.5.0 is reached only at its loopback endpoint (127.0.0.1:38274), using the original track video ID and existing single-track acquisition pipeline. Existing unambiguous local recordings are reused before any new request.
+
+The queue is persisted in the Musike user data folder, not in the repo. It records submission intent before POST, reconciles existing jobs by title plus exact video ID, then polls the job ID; an uncertain POST is never blindly repeated. A completed job is marked offline only if Musike can actually resolve its local file. Unliking cancels an unsubmitted job but never deletes a file or stops an already-submitted MusicGrabber job. No old favorites are automatically backfilled. The Library panel shows counts and recent job states and enables/disables future work. Only local clients with the dedicated request header can activate the queue.
+
+For album placement, enable MusicGrabber's own MusicBrainz metadata, automatic album routing for singles, year and track-number naming as desired. Unknown or ambiguous albums fall back to singles; do not make up a release. MusicGrabber owns its files, tags, covers, lyrics and quality settings. Use automatic downloads only for recordings you are allowed to download.
+
+New installations start with the feature disabled until enabled in the Library panel. Current version supports desktop/loopback favorites; native Android account-to-PC job forwarding and per-track offline badges are not implemented. Unit tests use a simulated provider, and real API schema/installed source were checked without submitting a music download.

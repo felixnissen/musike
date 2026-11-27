@@ -20,6 +20,12 @@ try {
   page.on("pageerror",(e:Error)=>errors.push(e.message));
   const base="http://127.0.0.1:"+s.port;
   await page.goto(base+"/library");
+  await page.getByRole("checkbox",{name:"Automatisk MusicGrabber-import"}).waitFor();
+  await page.getByRole("checkbox",{name:"Automatisk MusicGrabber-import"}).check();
+  await page.waitForFunction(async()=>{const r=await fetch("/api/favorite-grabber",{headers:{"x-musike-favorite":"1"}});return (await r.json()).enabled===true;});
+  await page.getByRole("checkbox",{name:"Automatisk MusicGrabber-import"}).uncheck();
+  await page.waitForFunction(async()=>{const r=await fetch("/api/favorite-grabber",{headers:{"x-musike-favorite":"1"}});return (await r.json()).enabled===false;});
+  console.log("HEART_PANEL_OK: persistent toggle via actual Musike API");
   await page.getByRole("link",{name:"Importera musik"}).click();
   for(const name of ["YouTube","Suno","Spotify","MusicGrabber","Egna musikfiler"]){
     await page.getByRole("button",{name:new RegExp("^"+name)}).click();
@@ -63,7 +69,7 @@ try {
   await desktopPage.addInitScript({content:"(()=>{let connected=false,auto=false;window.musikeDesktop={platform:\"win32\",setTheme:()=>{},setLanguage:()=>{},suno:async(action)=>{if(action===\"connect\")connected=true;if(action===\"disconnect\")connected=false;if(action===\"auto-on\")auto=true;if(action===\"auto-off\")auto=false;if(action===\"library\")return {songs:[{id:\"test-clip\",title:\"Test song\"}]};if(action===\"download\")return {status:\"imported\"};return {connected,auto};}};})();"});
   await desktopPage.goto(base+"/library/import");assert.equal(await desktopPage.evaluate("typeof window.musikeDesktop?.suno"),"function");await desktopPage.getByRole("button",{name:/^Suno/}).click();
   if(process.env.MUSIKE_SUNO_SCREENSHOT)await desktopPage.screenshot({path:process.env.MUSIKE_SUNO_SCREENSHOT});
-  await desktopPage.getByRole("button",{name:"Anslut Suno",exact:true}).click();await desktopPage.getByRole("button",{name:"Hämta bibliotek"}).click();await desktopPage.getByText("Test song",{exact:true}).waitFor();await desktopPage.getByRole("checkbox",{name:"Autoimportera redan nedladdade låtar"}).check();await desktopPage.getByRole("button",{name:"Importera",exact:true}).click();await desktopPage.getByRole("button",{name:"Importerad",exact:true}).waitFor();await desktopPage.getByRole("button",{name:"Koppla från"}).click();await desktopPage.getByRole("button",{name:"Anslut Suno",exact:true}).waitFor();
+  await desktopPage.getByRole("button",{name:"Anslut Suno",exact:true}).click();await desktopPage.getByText("Test song",{exact:true}).waitFor();await desktopPage.getByRole("checkbox",{name:"Autoimportera redan nedladdade låtar"}).check();await desktopPage.getByRole("button",{name:"Importera",exact:true}).click();await desktopPage.getByRole("button",{name:"Importerad",exact:true}).waitFor();await desktopPage.getByRole("button",{name:"Koppla från"}).click();await desktopPage.getByRole("button",{name:"Anslut Suno",exact:true}).waitFor();
   console.log("SUNO_UI_MOCK_OK: connect, library, auto toggle, import and disconnect");
   console.log("UI_SMOKE_OK: all five source buttons, file picker, import status, saved library and real audio decode");
 }finally{await browser?.close();await s.close();await rm(dir,{recursive:true,force:true});}

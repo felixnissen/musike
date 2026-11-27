@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import fastifyStatic from "@fastify/static";
-import Fastify from "fastify";
+import Fastify, {type FastifyRequest} from "fastify";
+import { createFavoriteGrabber } from "./favoriteGrabber.js";
 import { ALBUM_ID, album, ARTIST_ID, artist, GENRE_ID, genre, genreArtists, genres, searchAlbums } from "./browse.js";
 import { config } from "./config.js";
 import { localAudio, localLyrics, localMusicStatus } from "./localAudio.js";
@@ -64,6 +65,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   const peerClose = process.env.MUSIKE_PEER_ENABLED === "1"
     ? await startMusicPeerServer().catch(() => null)
     : null;
+  const grabber=createFavoriteGrabber();
+  const localFavorite=(req:FastifyRequest)=>["127.0.0.1","::1","::ffff:127.0.0.1"].includes(req.socket.remoteAddress||"")&&["127.0.0.1","localhost","[::1]"].includes(req.hostname.split(/:\d+$/)[0])&&req.headers["x-musike-favorite"]==="1";
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "warn" } });
 
   app.setErrorHandler((err, req, reply) => {
@@ -230,6 +233,9 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
     return proxyStream(req, reply, id, "video");
   });
 
+  app.get("/api/favorite-grabber", async(req,reply)=>localFavorite(req)?grabber.status():reply.code(403).send({error:"Local access only"}));
+  app.put("/api/favorite-grabber", async(req,reply)=>{if(!localFavorite(req))return reply.code(403).send({error:"Local access only"});const enabled=(req.body as {enabled?:unknown})?.enabled;if(typeof enabled!=="boolean")return reply.code(400).send({error:"Invalid setting"});return grabber.enable(enabled);});
+
   // Library
 
   app.get("/api/library", () => library.getLibrary());
@@ -248,17 +254,22 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   app.put("/api/favorites/:id", async (req) => {
     const track = library.sanitizeTrack(req.body);
     if (track.id !== trackId(req.params)) throw new HttpError(400, msg("idMismatch"));
-    return { favorites: await library.addFavorite(track) };
+    const favorites=await library.addFavorite(track);
+    if(localFavorite(req))await grabber.enqueue([track]).catch(e=>app.log.warn({err:e},"Favorite queue failed"));
+    return { favorites };
   });
 
   /** Bulk add, e.g. from the list search. */
   app.post("/api/favorites", async (req) => {
     const { tracks } = (req.body ?? {}) as { tracks?: unknown };
     if (!Array.isArray(tracks)) throw new HttpError(400, msg("tracksRequired"));
-    return { favorites: await library.addFavorites(tracks.slice(0, 500).map(library.sanitizeTrack)) };
+    const clean=tracks.slice(0,500).map(library.sanitizeTrack);
+    const favorites=await library.addFavorites(clean);
+    if(localFavorite(req))await grabber.enqueue(clean).catch(e=>app.log.warn({err:e},"Favorite queue failed"));
+    return { favorites };
   });
 
-  app.delete("/api/favorites/:id", async (req) => ({ favorites: await library.removeFavorite(trackId(req.params)) }));
+  app.delete("/api/favorites/:id", async (req) => {const id=trackId(req.params);const favorites=await library.removeFavorite(id);if(localFavorite(req))await grabber.cancel(id).catch(e=>app.log.warn({err:e},"Favorite queue failed"));return {favorites};});
 
   app.post("/api/history", async (req) => ({ history: await library.pushHistory(library.sanitizeTrack(req.body)) }));
 
@@ -307,7 +318,8 @@ export async function startServer(opts: StartOptions = {}): Promise<RunningServe
   await app.listen({ port, host });
 
   pruneCache().catch(() => {});
-  return { port, tools: found, close: async () => { await app.close(); await peerClose?.(); } };
+  const stopGrabber=grabber.start();
+  return { port, tools: found, close: async () => { stopGrabber(); await app.close(); await peerClose?.(); } };
 }
 
 /** First free port from `start` (up to 10 tries), so a second copy or a dev server doesn't block launch. */

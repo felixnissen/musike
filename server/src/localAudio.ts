@@ -132,6 +132,8 @@ async function scan() {
   refreshAt = Date.now();
 }
 
+export function invalidateLocalIndex(){ refreshAt=0; }
+
 async function ensureIndex() {
   if (rootName === path.resolve(musicRoot()) && Date.now() - refreshAt < 30_000) return;
   if (!inflight) inflight = scan().finally(() => { inflight = null; });

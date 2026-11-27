@@ -23,6 +23,9 @@ export async function setSunoAuto(enabled:boolean){if(enabled&&!((await sunoStat
 async function readIndex():Promise<Record<string,string>>{try{return JSON.parse(await readFile(indexFile(),"utf8"));}catch{return {};}}
 async function remember(id:string,localId:string){const index=await readIndex();index[id]=localId;await writeFile(indexFile()+".tmp",JSON.stringify(index),"utf8");await rename(indexFile()+".tmp",indexFile());}
 let session:Session|null=null, loaded=false, busy=false;
+const diagFile=()=>path.join(app.getPath("userData"),"suno-diagnostic.json");
+async function diag(stage:string,info:Json={}){await writeFile(diagFile(),JSON.stringify({at:Date.now(),stage,...info}),"utf8").catch(()=>{});}
+const keys=(v:unknown)=>v&&typeof v==="object"?Object.keys(v).slice(0,40):[];
 let tools:Tool[]=[];let sessionId="", protocol="2025-03-26", seq=0;
 const selected=new Map<string,{title:string;metadata:Json}>();
 const pendingCredits=new Set<string>();
@@ -44,7 +47,7 @@ async function load(){
   if(loaded)return;
   loaded=true;
   if(!safeStorage.isEncryptionAvailable())return;
-  try{session=JSON.parse(safeStorage.decryptString(await readFile(file())));}catch{session=null;}
+  try{session=JSON.parse(safeStorage.decryptString(await readFile(file())));}catch(e){session=null;await diag("authorization-unavailable",{missing:(e as NodeJS.ErrnoException).code==="ENOENT"});}
 }
 async function persist(s:Session){
   session=s;loaded=true;
@@ -71,7 +74,7 @@ function resetMcp(){tools=[];sessionId="";selected.clear();pendingCredits.clear(
 async function rpc(method:string,params:Json={},notify=false):Promise<Json>{
   const id=++seq;
   const r=await fetch(MCP,{method:"POST",redirect:"error",signal:AbortSignal.timeout(70000),headers:{authorization:"Bearer "+await access(),"content-type":"application/json",accept:"application/json, text/event-stream","MCP-Protocol-Version":protocol,...(sessionId?{"Mcp-Session-Id":sessionId}:{})},body:JSON.stringify({jsonrpc:"2.0",...(notify?{}:{id}),method,params})});
-  if(!r.ok)throw Error("Suno MCP HTTP "+r.status);
+  if(!r.ok){await diag("http-error",{method,status:r.status});throw Error("Suno MCP "+method+" HTTP "+r.status);}
   sessionId=r.headers.get("mcp-session-id")||sessionId;
   if(notify||r.status===202){await r.body?.cancel();return {};}
   let result:Json|undefined;
@@ -81,7 +84,7 @@ async function rpc(method:string,params:Json={},notify=false):Promise<Json>{
       let match;while((match=/\r?\n\r?\n/.exec(buffer))){const event=buffer.slice(0,match.index);buffer=buffer.slice(match.index+match[0].length);const data=event.split(/\r?\n/).filter(l=>l.startsWith("data:")).map(l=>l.slice(5).trimStart()).join("\n");if(!data)continue;const v=JSON.parse(data);if(v.id===id){result=v;break;}}
       if(result)break;}}finally{await reader.cancel();}
   }else result=await r.json() as Json;
-  if(!result||result.id!==id||result.error)throw Error("Suno MCP request failed");
+  if(!result||result.id!==id||result.error){await diag("rpc-error",{method,code:result?.error?.code});throw Error("Suno MCP "+method+" failed"+(typeof result?.error?.code==="number"?" ("+result.error.code+")":""));}
   return result.result||{};
 }
 async function connectMcp(){
@@ -98,11 +101,13 @@ async function connectMcp(){
 async function call(name:"library-list"|"audio-retrieve"|"audio-download",args:Json){
   await connectMcp();
   const t=tools.find(t=>t.name===name);
-  if(!t||Object.keys(args).some(k=>!Object.hasOwn(t.inputSchema?.properties||{},k)))throw Error("Suno tool schema changed: "+name);
+  if(!t||Object.keys(args).some(k=>!Object.hasOwn(t.inputSchema?.properties||{},k))){await diag("schema-error",{tool:name,available:tools.map(t=>t.name),properties:keys(t?.inputSchema?.properties)});throw Error("Suno tool schema changed: "+name);}
   const r=await rpc("tools/call",{name,arguments:args});
-  if(r.structuredContent&&typeof r.structuredContent==="object")return r.structuredContent as Json;
-  for(const c of r.content||[]){if(c.type==="text"){try{const v=JSON.parse(c.text);if(v&&typeof v==="object")return v;}catch{/* human text */}}}
-  throw Error("Unexpected Suno tool response");
+  let value:Json|undefined;
+  if(r.structuredContent&&typeof r.structuredContent==="object")value=r.structuredContent as Json;
+  if(!value)for(const c of r.content||[]){if(c.type==="text"){try{const v=JSON.parse(c.text);if(v&&typeof v==="object"){value=v;break;}}catch{/* human text */}}}
+  if(value){let parsed:Json=value;if(parsed.result&&typeof parsed.result==="object")parsed=parsed.result as Json;if(parsed.data&&typeof parsed.data==="object"&&!Array.isArray(parsed.data)&&!parsed.items&&!parsed.clips&&!parsed.songs&&!parsed.url&&!parsed.status&&!parsed.reason)parsed={...parsed,...parsed.data};if(r.isError&&parsed.reason!=="requires_credit"&&parsed.status!=="requires_credit"){const reason=typeof parsed.reason==="string"&&/^[a-z_]{1,60}$/.test(parsed.reason)?parsed.reason:"tool_error";await diag("tool-error",{tool:name,reason,keys:keys(parsed)});throw Error("Suno "+name+": "+reason);}return parsed;}
+  await diag("unknown-response",{tool:name,keys:keys(r),contentTypes:(r.content||[]).map((c:Json)=>c.type)});throw Error("Unexpected Suno "+name+" response");
 }
 export async function connectSuno(){
   if(busy)throw Error("Suno connection already in progress");
@@ -138,15 +143,16 @@ export async function sunoStatus(){await load();return {connected:!!session, per
 export async function disconnectSuno(){session=null;loaded=true;resetMcp();await setSunoAuto(false);await rm(file(),{force:true});return sunoStatus();}
 export async function sunoLibrary(cursor?:string,downloaded=false){
   const result=await call("library-list",{limit:50,...(cursor?{cursor}:{}),...(downloaded?{downloaded:true}:{})});
-  const rows=result.items??result.clips??result.songs??result.data?.items??result.data?.clips??result.data?.songs;
-  if(!Array.isArray(rows))throw Error("Suno library returned an unknown format");
+  const rows=Array.isArray(result)?result:result.items??result.clips??result.songs??(Array.isArray(result.data)?result.data:result.data?.items??result.data?.clips??result.data?.songs);
+  if(!Array.isArray(rows)){await diag("library-unknown",{keys:keys(result),dataKeys:keys(result.data)});throw Error("Suno library returned an unknown format");}
   const index=await readIndex();
-  const songs=await Promise.all(rows.filter((x:Json)=>x&&typeof x.id==="string"&&/^[a-zA-Z0-9_-]{1,100}$/.test(x.id)).map(async(x:Json)=>{
+  const songs=await Promise.all(rows.map((x:Json)=>x&&({...x,id:x.id??x.clip_id??x.clip?.id,title:x.title??x.clip?.title})).filter((x:Json)=>x&&typeof x.id==="string"&&/^[a-zA-Z0-9_-]{1,100}$/.test(x.id)).map(async(x:Json)=>{
     const title=String(x.title||x.metadata?.title||"Untitled").slice(0,300);
     selected.set(x.id,{title,metadata:x});
     return {id:x.id,title,imported:!!(index[x.id]&&await importedAudio(index[x.id]))};
   }));
-  return {songs,nextCursor:typeof result.next_cursor==="string"?result.next_cursor:null};
+  await diag("library-loaded",{rows:rows.length,accepted:songs.length,rowKeys:keys(rows[0]),hasNext:!!(result.next_cursor??result.nextCursor)});
+  const next=result.next_cursor??result.nextCursor;return {songs,nextCursor:typeof next==="string"?next:null};
 }
 export async function sunoDownload(id:string,confirm=false){
   const song=selected.get(id);if(!song)throw Error("Select a song from your Suno library first");

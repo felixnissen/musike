@@ -61,9 +61,9 @@ export const api: MusikeApi = {
     }),
 
   library: () => request<Library>("/api/library"),
-  addFavorite: (t: Track) => request<{ favorites: Track[] }>(`/api/favorites/${t.id}`, { method: "PUT", json: t }),
-  addFavorites: (tracks: Track[]) => request<{ favorites: Track[] }>("/api/favorites", { method: "POST", json: { tracks } }),
-  removeFavorite: (id: string) => request<{ favorites: Track[] }>(`/api/favorites/${id}`, { method: "DELETE" }),
+  addFavorite: (t: Track) => request<{ favorites: Track[] }>(`/api/favorites/${t.id}`, { method: "PUT", json: t, headers:{"x-musike-favorite":"1"} }),
+  addFavorites: (tracks: Track[]) => request<{ favorites: Track[] }>("/api/favorites", { method: "POST", json: { tracks }, headers:{"x-musike-favorite":"1"} }),
+  removeFavorite: (id: string) => request<{ favorites: Track[] }>(`/api/favorites/${id}`, { method: "DELETE", headers:{"x-musike-favorite":"1"} }),
   pushHistory: (t: Track) => request<{ history: Track[] }>("/api/history", { method: "POST", json: t }),
   createPlaylist: (name: string, tracks: Track[] = []) =>
     request<Playlist>("/api/playlists", { method: "POST", json: { name, tracks } }),

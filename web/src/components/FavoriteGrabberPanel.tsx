@@ -1,0 +1,16 @@
+import { useEffect,useState } from "react";
+import { HeartIcon,DownloadSimpleIcon } from "@phosphor-icons/react";
+import { capabilities } from "../lib/api";
+import { useI18n } from "../i18n";
+type Status={enabled:boolean;counts:Record<string,number>;recent:{id:string;title:string;state:string;error?:string}[]};
+export function FavoriteGrabberPanel(){
+ const sv=useI18n(s=>s.lang==="sv"),tr=(a:string,b:string)=>sv?a:b;
+ const [status,setStatus]=useState<Status>(),[busy,setBusy]=useState(false),[error,setError]=useState(""),[expanded,setExpanded]=useState(false);
+ const supported=capabilities.video&&["127.0.0.1","localhost","[::1]"].includes(window.location.hostname);
+ useEffect(()=>{if(!supported)return;let alive=true;const refresh=()=>void fetch("/api/favorite-grabber",{headers:{"x-musike-favorite":"1"}}).then(r=>{if(!r.ok)throw Error("Unavailable");return r.json();}).then(r=>{if(alive)setStatus(r);}).catch(()=>{});refresh();const timer=setInterval(refresh,5000);return()=>{alive=false;clearInterval(timer);};},[supported]);
+ if(!supported||!status)return null;
+ const toggle=async(enabled:boolean)=>{setBusy(true);setError("");try{const r=await fetch("/api/favorite-grabber",{method:"PUT",headers:{"content-type":"application/json","x-musike-favorite":"1"},body:JSON.stringify({enabled})});if(!r.ok)throw Error("MusicGrabber setting failed");setStatus(await r.json());}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
+ const counts=status.counts;
+ const labels:Record<string,string>={queued:tr("I kö","Queued"),submitted:tr("Hämtas","Downloading"),checking:tr("Kontrolleras","Checking"),offline:tr("Lokalt sparad","Saved locally"),"needs-review":tr("Behöver granskas","Needs review"),failed:tr("Misslyckades","Failed"),cancelled:tr("Avbruten","Cancelled")};
+ return <section className="mx-4 my-3 rounded-[16px] bg-surface-2 p-4 ring-1 ring-line"><div className="flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 font-semibold"><HeartIcon weight="fill" size={22} /> {tr("Hjärtat hämtar musik","Heart saves music")}</h3><input aria-label={tr("Automatisk MusicGrabber-import","Automatic MusicGrabber import")} type="checkbox" checked={status.enabled} disabled={busy} onChange={e=>void toggle(e.target.checked)}/></div><p className="mt-2 text-sm text-fg-2">{tr("Nya gillade låtar köas för MusicGrabber. Aktivera bara för musik du får ladda ned. Befintliga filer återanvänds.","New likes are queued for MusicGrabber. Enable only for music you may download. Existing files are reused.")}</p><button className="mt-3 flex items-center gap-2 text-sm text-accent-text" onClick={()=>setExpanded(x=>!x)}><DownloadSimpleIcon size={18}/>{tr("Kö","Queue")}: {(counts.queued||0)+(counts.submitted||0)+(counts.checking||0)} · {tr("Offline","Offline")}: {counts.offline||0} · {tr("Granska","Review")}: {(counts["needs-review"]||0)+(counts.failed||0)}</button>{expanded&&<div className="mt-3 max-h-56 overflow-auto">{status.recent.map(j=><div key={j.id} className="border-t border-line py-2 text-sm"><div>{j.title}</div><div className="text-xs text-fg-2">{labels[j.state]||j.state}{j.error?" · "+j.error:""}</div></div>)}</div>}{error&&<p role="alert">{error}</p>}</section>;
+}
